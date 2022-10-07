@@ -58,8 +58,8 @@ public class StoreCopy implements Callable<Integer> {
     private File sourceConfFile;
 
     // assumption different data directories
-    @Parameters(index = "1", description = "Target 'neo4j.conf' file to use.")
-    private File targetConfFile;
+    @Parameters(index = "1", description = "Target directory for data files.")
+    private File targetDirectory;
 
     @Option(names = {"-db", "--databaseName"}, description = "Name of the database.", defaultValue = "neo4j")
     private String databaseName = "neo4j";
@@ -73,7 +73,7 @@ public class StoreCopy implements Callable<Integer> {
     @Option(names = {"-il", "--ignoreLabels"}, description = "Labels to ignore.")
     private Set<String> labels2Ignore = new HashSet<>();
 
-    @Option(names = {"-dl", "--deleteLabels"}, description = "Labels to delete.")
+    @Option(names = {"-dl", "--deleteLabels"}, description = "Nodes with labels to delete (exclude).")
     private Set<String> labels2Delete = new HashSet<>();
 
     @Option(names = {"--keep-node-ids"}, description = "Maintain the IDs for the nodes.", defaultValue = "true")
@@ -86,15 +86,13 @@ public class StoreCopy implements Callable<Integer> {
         System.exit(exitCode);
     }
 
-    private Config sourceConfig;
-    private Config targetConfig;
-
-
     @Override
     public Integer call() {
         // load configuration from files
-        this.sourceConfig = Config.newBuilder().fromFile(sourceConfFile.toPath()).build();
-        this.targetConfig = Config.newBuilder().fromFile(targetConfFile.toPath()).build();
+        if (!sourceConfFile.isFile()) {
+            throw new IllegalArgumentException("Source configuration file does not exist: " + sourceConfFile.getAbsolutePath());
+        }
+
 
 
         System.out.printf(
@@ -108,6 +106,20 @@ public class StoreCopy implements Callable<Integer> {
             keepNodeIds);
         copyStore();
         return 0;
+    }
+
+    class CopyStoreJob {
+
+        private final Config sourceConfig;
+        private final Config targetConfig;
+
+        public CopyStoreJob() {
+            // create a source configuration from main install
+            this.sourceConfig = Config.newBuilder().fromFile(sourceConfFile.toPath()).build();
+
+            // change the target directory for the data
+            this.targetConfig = Config.newBuilder().fromFile(targetConfFile.toPath()).build();
+        }
     }
 
     interface Flusher {
@@ -349,9 +361,6 @@ public class StoreCopy implements Callable<Integer> {
     private LongLongMap copyNodes(
         BatchInserter sourceDb,
         BatchInserter targetDb,
-        Set<String> ignoreProperties,
-        Set<String> ignoreLabels,
-        Set<String> deleteNodesWithLabels,
         long highestNodeId,
         Flusher flusher,
         boolean stableNodeIds) {
@@ -363,7 +372,7 @@ public class StoreCopy implements Callable<Integer> {
         while (node <= highestNodeId) {
             try {
                 if (sourceDb.nodeExists(node)) {
-                    if (labelInSet(sourceDb.getNodeLabels(node), deleteNodesWithLabels)) {
+                    if (labelInSet(sourceDb.getNodeLabels(node), labels2Delete)) {
                         removed++;
                     }
                     else {
@@ -371,15 +380,15 @@ public class StoreCopy implements Callable<Integer> {
                             targetDb.createNode(
                                 node,
                                 getProperties(sourceDb.getNodeProperties(node)),
-                                labelsArray(sourceDb, node));
+                                labelsArray(sourceDb, node)
+                            );
                         }
                         else {
                             long newNodeId =
                                 targetDb.createNode(
-                                    getProperties(
-                                        sourceDb.getNodeProperties(node),
-                                        ignoreProperties),
-                                    labelsArray(sourceDb, node, ignoreLabels));
+                                    getProperties(sourceDb.getNodeProperties(node)),
+                                    labelsArray(sourceDb, node)
+                                );
                             copiedNodes.put(node, newNodeId);
                         }
                     }
