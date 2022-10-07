@@ -1,11 +1,6 @@
 package org.neo4j.tool;
 
-import static java.util.Arrays.asList;
-import static java.util.Collections.emptySet;
-import static org.neo4j.configuration.GraphDatabaseSettings.DEFAULT_DATABASE_NAME;
-
 import java.io.File;
-import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.PrintWriter;
 import java.lang.reflect.Field;
@@ -14,20 +9,11 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.Callable;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import org.eclipse.collections.api.map.primitive.LongLongMap;
-import org.eclipse.collections.api.map.primitive.MutableLongLongMap;
-import org.eclipse.collections.impl.map.mutable.primitive.LongLongHashMap;
-import picocli.CommandLine;
-import picocli.CommandLine.Command;
-import picocli.CommandLine.Option;
-import picocli.CommandLine.Parameters;
 
 import org.neo4j.batchinsert.BatchInserter;
 import org.neo4j.batchinsert.BatchInserters;
@@ -48,6 +34,16 @@ import org.neo4j.internal.recordstorage.DirectRecordAccess;
 import org.neo4j.internal.recordstorage.DirectRecordAccessSet;
 import org.neo4j.internal.recordstorage.RecordIdType;
 import org.neo4j.kernel.internal.GraphDatabaseAPI;
+
+import org.eclipse.collections.api.map.primitive.LongLongMap;
+import org.eclipse.collections.api.map.primitive.MutableLongLongMap;
+import org.eclipse.collections.impl.map.mutable.primitive.LongLongHashMap;
+import picocli.CommandLine;
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Option;
+import picocli.CommandLine.Parameters;
+
+import static org.neo4j.configuration.GraphDatabaseSettings.DEFAULT_DATABASE_NAME;
 
 @Command(name = "copy", mixinStandardHelpOptions = true, version = "copy 1.0",
     description = "Copies the source database to the target database, while optimizing size and consistency")

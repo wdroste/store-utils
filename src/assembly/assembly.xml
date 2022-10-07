@@ -8,17 +8,8 @@
     <fileSets>
         <fileSet>
             <includes>
-                <include>readme.md</include>
-                <include>copy-store.sh</include>
+                <include>README.md</include>
                 <include>LICENSE.txt</include>
-                <include>neo4j.properties</include>
-            </includes>
-            <outputDirectory>/</outputDirectory>
-        </fileSet>
-        <fileSet>
-            <directory>${basedir}/target</directory>
-            <includes>
-                <include>store-util*.jar</include>
             </includes>
             <outputDirectory>/</outputDirectory>
         </fileSet>
