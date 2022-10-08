@@ -1,5 +1,7 @@
 package org.neo4j.tool;
 
+import static org.neo4j.configuration.GraphDatabaseSettings.data_directory;
+
 import java.io.File;
 import java.io.IOException;
 import java.util.Collection;
@@ -7,10 +9,9 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
+import org.eclipse.collections.api.map.primitive.LongLongMap;
+import org.eclipse.collections.api.map.primitive.MutableLongLongMap;
+import org.eclipse.collections.impl.map.mutable.primitive.LongLongHashMap;
 import org.neo4j.batchinsert.BatchInserter;
 import org.neo4j.batchinsert.BatchInserters;
 import org.neo4j.batchinsert.internal.BatchRelationship;
@@ -25,19 +26,18 @@ import org.neo4j.internal.id.IdGeneratorFactory;
 import org.neo4j.internal.recordstorage.RecordIdType;
 import org.neo4j.io.layout.DatabaseLayout;
 import org.neo4j.kernel.internal.GraphDatabaseAPI;
-
-import org.eclipse.collections.api.map.primitive.LongLongMap;
-import org.eclipse.collections.api.map.primitive.MutableLongLongMap;
-import org.eclipse.collections.impl.map.mutable.primitive.LongLongHashMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
-import static org.neo4j.configuration.GraphDatabaseSettings.data_directory;
-
-@Command(name = "copy", version = "copy 1.0",
-    description = "Copies the source database to the target database, while optimizing size and consistency")
+@Command(
+        name = "copy",
+        version = "copy 1.0",
+        description =
+                "Copies the source database to the target database, while optimizing size and consistency")
 public class StoreCopy implements Runnable {
 
     private static final Logger log = LoggerFactory.getLogger(StoreCopy.class);
@@ -45,29 +45,48 @@ public class StoreCopy implements Runnable {
     private static final Label[] NO_LABELS = new Label[0];
 
     // assumption different data directories
-    @Parameters(index = "0", description = "Source 'neo4j.conf' file to use.")
-    private File sourceConfFile;
+    @Parameters(index = "0", description = "Source directory for the data files.")
+    private File sourceDataDirectory;
 
     // assumption different data directories
     @Parameters(index = "1", description = "Target directory for data files.")
-    private File targetDirectory;
+    private File targetDataDirectory;
 
-    @Option(names = {"-db", "--databaseName"}, description = "Name of the database.", defaultValue = "neo4j")
+    @Option(
+            names = {"-db", "--databaseName"},
+            description = "Name of the database.",
+            defaultValue = "neo4j")
     private String databaseName = "neo4j";
 
-    @Option(names = {"-irt", "--ignoreRelationshipTypes"}, description = "Relationship types to ignore.")
+    @Option(
+            names = {"-cfg", "--neo4jConf"},
+            description = "Source 'neo4j.conf' file location.")
+    private File sourceConfigurationFile;
+
+    @Option(
+            names = {"-irt", "--ignoreRelationshipTypes"},
+            description = "Relationship types to ignore.")
     private Set<String> ignoreRelationshipTypes = new HashSet<>();
 
-    @Option(names = {"-ip", "--ignoreProperties"}, description = "Properties to ignore.")
+    @Option(
+            names = {"-ip", "--ignoreProperties"},
+            description = "Properties to ignore.")
     private Set<String> ignoreProperties = new HashSet<>();
 
-    @Option(names = {"-il", "--ignoreLabels"}, description = "Labels to ignore.")
+    @Option(
+            names = {"-il", "--ignoreLabels"},
+            description = "Labels to ignore.")
     private Set<String> ignoreLabels = new HashSet<>();
 
-    @Option(names = {"-dl", "--deleteLabels"}, description = "Nodes with labels to delete (exclude).")
+    @Option(
+            names = {"-dl", "--deleteLabels"},
+            description = "Nodes with labels to delete (exclude).")
     private Set<String> deleteLabels = new HashSet<>();
 
-    @Option(names = {"--keep-node-ids"}, description = "Maintain the IDs for the nodes.", defaultValue = "true")
+    @Option(
+            names = {"--keep-node-ids"},
+            description = "Maintain the IDs for the nodes.",
+            defaultValue = "true")
     private boolean keepNodeIds = true;
 
     // this example implements Callable, so parsing, error handling and handling user
@@ -87,15 +106,7 @@ public class StoreCopy implements Runnable {
 
     @Override
     public void run() {
-        // load configuration from files
-        if (!sourceConfFile.isFile()) {
-            throw new IllegalArgumentException("Source configuration file does not exist: " + sourceConfFile);
-        }
-        if (!targetDirectory.isDirectory() && !targetDirectory.mkdirs()) {
-            throw new IllegalArgumentException("Unable to create directory for target database: " + targetDirectory);
-        }
-        final var job = new CopyStoreJob();
-        job.run();
+        new CopyStoreJob().run();
     }
 
     class CopyStoreJob implements Runnable {
@@ -104,18 +115,35 @@ public class StoreCopy implements Runnable {
         private final Config targetConfig;
 
         public CopyStoreJob() {
+            // check source directory
+            if (!sourceDataDirectory.isDirectory()) {
+                throw new IllegalArgumentException(
+                        "Source data directory does not exist: " + sourceDataDirectory);
+            }
+            // load configuration from files
+            if (!targetDataDirectory.isDirectory() && !targetDataDirectory.mkdirs()) {
+                throw new IllegalArgumentException(
+                        "Unable to create directory for target database: " + targetDataDirectory);
+            }
+
             // create a source configuration from main install
-            this.sourceConfig = Config.newBuilder().fromFile(sourceConfFile.toPath()).build();
+            final var sourceCfgBld = Config.newBuilder();
+            if (null != sourceConfigurationFile && !sourceConfigurationFile.isFile()) {
+                sourceCfgBld.fromFile(sourceConfigurationFile.toPath());
+            }
+            sourceCfgBld.set(data_directory, sourceDataDirectory.toPath());
+            sourceConfig = sourceCfgBld.build();
 
             // change the target directory for the data
-            this.targetConfig = Config.newBuilder()
-                .fromConfig(this.sourceConfig)
-                .set(data_directory, targetDirectory.toPath())
-                .build();
+            this.targetConfig =
+                    Config.newBuilder()
+                            .fromConfig(this.sourceConfig)
+                            .set(data_directory, targetDataDirectory.toPath())
+                            .build();
 
             final var srcPath = this.sourceConfig.get(data_directory);
 
-            println("Copying from %s to %s", srcPath, targetDirectory);
+            println("Copying from %s to %s", srcPath, targetDataDirectory);
             if (!ignoreRelationshipTypes.isEmpty()) {
                 println("Ignore relationship types: %s", ignoreRelationshipTypes);
             }
@@ -132,7 +160,6 @@ public class StoreCopy implements Runnable {
         }
 
         @Override
-
         public void run() {
             final HighestInfo highestInfo = getHighestNodeId();
             // build source database management
@@ -150,8 +177,7 @@ public class StoreCopy implements Runnable {
             try {
                 println("Stopping source database");
                 sourceDb.shutdown();
-            }
-            catch (Exception e) {
+            } catch (Exception e) {
                 log.error("Error while stopping source database.", e);
             }
             println("Stopped source database");
@@ -160,8 +186,7 @@ public class StoreCopy implements Runnable {
         BatchInserter newBatchInserter(Config config) {
             try {
                 return BatchInserters.inserter(DatabaseLayout.of(config));
-            }
-            catch (IOException e) {
+            } catch (IOException e) {
                 throw new IllegalArgumentException(e);
             }
         }
@@ -179,20 +204,83 @@ public class StoreCopy implements Runnable {
 
         private HighestInfo getHighestNodeId() {
             final var home = sourceConfig.get(GraphDatabaseSettings.neo4j_home);
-            final var managementService =
-                new DatabaseManagementServiceBuilder(home)
-                    .loadPropertiesFromFile(sourceConfFile.toPath()).build();
+            final var managementServiceBld = new DatabaseManagementServiceBuilder(home);
+            managementServiceBld.setConfig(data_directory, sourceDataDirectory.toPath());
+            final var managementService = managementServiceBld.build();
             GraphDatabaseService graphDb = managementService.database(databaseName);
 
             GraphDatabaseAPI api = (GraphDatabaseAPI) graphDb;
-            final var idGenerators = api.getDependencyResolver().resolveDependency(IdGeneratorFactory.class);
+            final var idGenerators =
+                    api.getDependencyResolver().resolveDependency(IdGeneratorFactory.class);
             long highestNodeId = idGenerators.get(RecordIdType.NODE).getHighestPossibleIdInUse();
-            long highestRelId = idGenerators.get(RecordIdType.RELATIONSHIP).getHighestPossibleIdInUse();
+            long highestRelId =
+                    idGenerators.get(RecordIdType.RELATIONSHIP).getHighestPossibleIdInUse();
             managementService.shutdown();
+
             return new HighestInfo(highestNodeId, highestRelId);
         }
 
-        boolean createRelationship(BatchInserter targetDb, BatchInserter sourceDb, BatchRelationship rel, LongLongMap copiedNodeIds) {
+        private LongLongMap copyNodes(
+                BatchInserter sourceDb, BatchInserter targetDb, long highestNodeId) {
+            MutableLongLongMap copiedNodes =
+                    keepNodeIds ? new LongLongHashMap(10_000_000) : new DevNullLongLongMap();
+
+            long time = System.currentTimeMillis();
+            long notFound = 0;
+            long removed = 0;
+            long node = -1;
+            while (node <= highestNodeId) {
+                node++;
+                try {
+                    if (!sourceDb.nodeExists(node)) {
+                        notFound++;
+                        continue;
+                    }
+
+                    if (labelInSet(sourceDb.getNodeLabels(node), deleteLabels)) {
+                        removed++;
+                        continue;
+                    }
+
+                    // found
+                    long newNodeId =
+                            targetDb.createNode(
+                                    getProperties(sourceDb.getNodeProperties(node)),
+                                    labelsArray(sourceDb, node));
+                    copiedNodes.put(node, newNodeId);
+                } catch (Exception e) {
+                    if (e instanceof org.neo4j.kernel.impl.store.InvalidRecordException
+                            && e.getMessage().endsWith("not in use")) {
+                        notFound++;
+                    }
+                }
+                if (node % 10000 == 0) {
+                    System.out.print(".");
+                }
+                if (node % 500000 == 0) {
+                    System.out.printf(
+                            " %d / %d (%d%%) unused %d removed %d%n",
+                            node, highestNodeId, percent(node, highestNodeId), notFound, removed);
+                }
+            }
+            time = Math.max(1, (System.currentTimeMillis() - time) / 1000);
+            System.out.printf(
+                    "%n copying of %d node records took %d seconds (%d rec/s). Unused Records %d (%d%%). Removed Records %d (%d%%).%n",
+                    node,
+                    time,
+                    node / time,
+                    notFound,
+                    percent(notFound, node),
+                    removed,
+                    percent(removed, node));
+            return copiedNodes;
+        }
+
+        boolean createRelationship(
+                BatchInserter targetDb,
+                BatchInserter sourceDb,
+                BatchRelationship rel,
+                LongLongMap copiedNodeIds) {
             long startNodeId = rel.getStartNode(), endNodeId = rel.getEndNode();
             if (copiedNodeIds != null) {
                 startNodeId = copiedNodeIds.get(startNodeId);
@@ -203,18 +291,20 @@ public class StoreCopy implements Runnable {
             }
             final RelationshipType type = rel.getType();
             try {
-                Map<String, Object> props =
-                    getProperties(sourceDb.getRelationshipProperties(rel.getId()));
+                final var props = getProperties(sourceDb.getRelationshipProperties(rel.getId()));
                 targetDb.createRelationship(startNodeId, endNodeId, type, props);
                 return true;
-            }
-            catch (Exception e) {
+            } catch (Exception e) {
                 log.error("Failed to create relationship.", e);
             }
             return false;
         }
 
-        void copyRelationships(BatchInserter sourceDb, BatchInserter targetDb, LongLongMap copiedNodeIds, long highestRelId) {
+        void copyRelationships(
+                BatchInserter sourceDb,
+                BatchInserter targetDb,
+                LongLongMap copiedNodeIds,
+                long highestRelId) {
             long time = System.currentTimeMillis();
             long relId = 0;
             long notFound = 0;
@@ -227,14 +317,12 @@ public class StoreCopy implements Runnable {
                         if (!createRelationship(targetDb, sourceDb, rel, copiedNodeIds)) {
                             removed++;
                         }
-                    }
-                    else {
+                    } else {
                         removed++;
                     }
-                }
-                catch (Exception e) {
+                } catch (Exception e) {
                     if (e instanceof org.neo4j.kernel.impl.store.InvalidRecordException
-                        && e.getMessage().endsWith("not in use")) {
+                            && e.getMessage().endsWith("not in use")) {
                         notFound++;
                     }
                 }
@@ -242,71 +330,23 @@ public class StoreCopy implements Runnable {
                     System.out.print(".");
                 }
                 if (relId % 500000 == 0) {
-                    printf(" %d / %d (%d%%) unused %d removed %d%n",
-                           relId, highestRelId, percent(relId, highestRelId), notFound, removed);
+                    printf(
+                            " %d / %d (%d%%) unused %d removed %d%n",
+                            relId, highestRelId, percent(relId, highestRelId), notFound, removed);
                 }
             }
             time = Math.max(1, (System.currentTimeMillis() - time) / 1000);
-            final var msg = "%n copying of %d relationship records took %d seconds (%d rec/s). Unused Records %d (%d%%) Removed Records %d (%d%%)%n";
-            printf(msg, relId, time, relId / time, notFound, percent(notFound, relId), removed, percent(removed, relId));
-        }
-
-
-        private LongLongMap copyNodes(BatchInserter sourceDb, BatchInserter targetDb, long highestNodeId) {
-            MutableLongLongMap copiedNodes = keepNodeIds ? new LongLongHashMap(10_000_000) : null;
-
-            long time = System.currentTimeMillis();
-            long node = 0;
-            long notFound = 0;
-            long removed = 0;
-            while (node <= highestNodeId) {
-                try {
-                    if (sourceDb.nodeExists(node)) {
-                        if (labelInSet(sourceDb.getNodeLabels(node), deleteLabels)) {
-                            removed++;
-                        }
-                        else {
-                            long newNodeId =
-                                targetDb.createNode(
-                                    getProperties(sourceDb.getNodeProperties(node)),
-                                    labelsArray(sourceDb, node)
-                                );
-                            if (keepNodeIds) {
-                                copiedNodes.put(node, newNodeId);
-                            }
-                        }
-                    }
-                    else {
-                        notFound++;
-                    }
-                }
-                catch (Exception e) {
-                    if (e instanceof org.neo4j.kernel.impl.store.InvalidRecordException
-                        && e.getMessage().endsWith("not in use")) {
-                        notFound++;
-                    }
-                }
-                node++;
-                if (node % 10000 == 0) {
-                    System.out.print(".");
-                }
-                if (node % 500000 == 0) {
-                    System.out.printf(
-                        " %d / %d (%d%%) unused %d removed %d%n",
-                        node, highestNodeId, percent(node, highestNodeId), notFound, removed);
-                }
-            }
-            time = Math.max(1, (System.currentTimeMillis() - time) / 1000);
-            System.out.printf(
-                "%n copying of %d node records took %d seconds (%d rec/s). Unused Records %d (%d%%). Removed Records %d (%d%%).%n",
-                node,
-                time,
-                node / time,
-                notFound,
-                percent(notFound, node),
-                removed,
-                percent(removed, node));
-            return copiedNodes;
+            final var msg =
+                    "%n copying of %d relationship records took %d seconds (%d rec/s). Unused Records %d (%d%%) Removed Records %d (%d%%)%n";
+            printf(
+                    msg,
+                    relId,
+                    time,
+                    relId / time,
+                    notFound,
+                    percent(notFound, relId),
+                    removed,
+                    percent(removed, relId));
         }
     }
 
