@@ -206,6 +206,7 @@ public class StoreCopy implements Runnable {
             final var home = sourceConfig.get(GraphDatabaseSettings.neo4j_home);
             final var managementServiceBld = new DatabaseManagementServiceBuilder(home);
             managementServiceBld.setConfig(data_directory, sourceDataDirectory.toPath());
+            managementServiceBld.setConfig(GraphDatabaseSettings.read_only, true);
             final var managementService = managementServiceBld.build();
             GraphDatabaseService graphDb = managementService.database(databaseName);
 
