@@ -4,6 +4,8 @@ import static org.neo4j.configuration.GraphDatabaseSettings.data_directory;
 import static org.neo4j.configuration.GraphDatabaseSettings.pagecache_buffered_flush_enabled;
 import static org.neo4j.configuration.GraphDatabaseSettings.pagecache_direct_io;
 import static org.neo4j.configuration.GraphDatabaseSettings.pagecache_memory;
+import static org.neo4j.internal.recordstorage.RecordIdType.NODE;
+import static org.neo4j.internal.recordstorage.RecordIdType.RELATIONSHIP;
 
 import java.io.File;
 import java.io.IOException;
@@ -23,14 +25,12 @@ import org.neo4j.batchinsert.internal.FileSystemClosingBatchInserter;
 import org.neo4j.configuration.Config;
 import org.neo4j.configuration.GraphDatabaseSettings;
 import org.neo4j.dbms.api.DatabaseManagementServiceBuilder;
-import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Label;
 import org.neo4j.graphdb.RelationshipType;
 import org.neo4j.internal.helpers.collection.Iterables;
 import org.neo4j.internal.id.IdGeneratorFactory;
 import org.neo4j.internal.recordstorage.DirectRecordAccess;
 import org.neo4j.internal.recordstorage.DirectRecordAccessSet;
-import org.neo4j.internal.recordstorage.RecordIdType;
 import org.neo4j.io.layout.DatabaseLayout;
 import org.neo4j.kernel.impl.store.InvalidRecordException;
 import org.neo4j.kernel.internal.GraphDatabaseAPI;
@@ -146,6 +146,7 @@ public class StoreCopy implements Runnable {
     class CopyStoreJob implements Runnable {
 
         private final Config sourceConfig;
+        private final HighestInfo highestInfo;
         private final BatchInserter sourceDb;
         private final BatchInserter targetDb;
 
@@ -163,7 +164,7 @@ public class StoreCopy implements Runnable {
 
             // create a source configuration from main install
             final var sourceCfgBld = Config.newBuilder();
-            if (null != sourceConfigurationFile && !sourceConfigurationFile.isFile()) {
+            if (null != sourceConfigurationFile && sourceConfigurationFile.isFile()) {
                 sourceCfgBld.fromFile(sourceConfigurationFile.toPath());
             } else {
                 sourceCfgBld.set(pagecache_memory, "4G");
@@ -174,10 +175,11 @@ public class StoreCopy implements Runnable {
             sourceConfig = sourceCfgBld.build();
 
             // change the target directory for the data
-            final Config targetConfig = Config.newBuilder()
-                .fromConfig(this.sourceConfig)
-                .set(data_directory, targetDataDirectory.toPath())
-                .build();
+            Config targetConfig =
+                    Config.newBuilder()
+                            .fromConfig(this.sourceConfig)
+                            .set(data_directory, targetDataDirectory.toPath())
+                            .build();
 
             final var srcPath = this.sourceConfig.get(data_directory);
 
@@ -195,6 +197,12 @@ public class StoreCopy implements Runnable {
                 println("Delete nodes with label(s): %s", ignoreRelationshipTypes);
             }
 
+            // avoid nasty warning
+            org.neo4j.internal.unsafe.IllegalAccessLoggerSuppressor.suppress();
+
+            // find the highest node
+            this.highestInfo = getHighestNodeId();
+
             // create inserters
             this.sourceDb = newBatchInserter(sourceConfig);
             this.targetDb = newBatchInserter(targetConfig);
@@ -202,8 +210,6 @@ public class StoreCopy implements Runnable {
 
         @Override
         public void run() {
-            final HighestInfo highestInfo = getHighestNodeId();
-
             // copy nodes from source to target
             final LongLongMap copiedNodeIds = copyNodes(highestInfo.nodeId);
 
@@ -246,18 +252,20 @@ public class StoreCopy implements Runnable {
 
         private HighestInfo getHighestNodeId() {
             final var home = sourceConfig.get(GraphDatabaseSettings.neo4j_home);
+            println("Neo4j Home: %s", home);
+
             final var managementServiceBld = new DatabaseManagementServiceBuilder(home);
             managementServiceBld.setConfig(data_directory, sourceDataDirectory.toPath());
-            managementServiceBld.setConfig(GraphDatabaseSettings.read_only, true);
-            final var managementService = managementServiceBld.build();
-            GraphDatabaseService graphDb = managementService.database(databaseName);
+            println("Source Data Directory: %s", sourceDataDirectory);
 
-            GraphDatabaseAPI api = (GraphDatabaseAPI) graphDb;
+            final var managementService = managementServiceBld.build();
+            final var graphDb = managementService.database(databaseName);
+
+            final var api = (GraphDatabaseAPI) graphDb;
             final var idGenerators =
                     api.getDependencyResolver().resolveDependency(IdGeneratorFactory.class);
-            long highestNodeId = idGenerators.get(RecordIdType.NODE).getHighestPossibleIdInUse();
-            long highestRelId =
-                    idGenerators.get(RecordIdType.RELATIONSHIP).getHighestPossibleIdInUse();
+            long highestNodeId = idGenerators.get(NODE).getHighestPossibleIdInUse();
+            long highestRelId = idGenerators.get(RELATIONSHIP).getHighestPossibleIdInUse();
             managementService.shutdown();
 
             return new HighestInfo(highestNodeId, highestRelId);

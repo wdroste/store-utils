@@ -111,14 +111,14 @@
                             <name>copy</name>
                             <mainClass>org.neo4j.tool.StoreCopy</mainClass>
                         </program>
-                        <jvmSettings>
-                            <initialMemorySize>16g</initialMemorySize>
-                            <maxMemorySize>16g</maxMemorySize>
-                        </jvmSettings>
                     </programs>
                     <repositoryLayout>flat</repositoryLayout>
                     <repositoryName>lib</repositoryName>
                     <assembleDirectory>${project.build.directory}/store-utils-${project.version}</assembleDirectory>
+                    <defaultJvmSettings>
+                        <initialMemorySize>16g</initialMemorySize>
+                        <maxMemorySize>16g</maxMemorySize>
+                    </defaultJvmSettings>
                 </configuration>
             </plugin>
             <plugin>
