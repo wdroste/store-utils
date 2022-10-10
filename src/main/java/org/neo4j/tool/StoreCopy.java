@@ -135,18 +135,19 @@ public class StoreCopy implements Runnable {
                     ((Map<?, ?>) cacheField.get(recordAccessSet.getRelRecords())).clear();
                     ((Map<?, ?>) cacheField.get(recordAccessSet.getPropertyRecords())).clear();
                 } catch (IllegalAccessException e) {
-                    throw new RuntimeException("Error clearing cache " + cacheField, e);
+                    throw new IllegalStateException("Error clearing cache " + cacheField, e);
                 }
             };
         } catch (IllegalAccessException | NoSuchFieldException e) {
-            throw new RuntimeException("Error accessing cache field ", e);
+            throw new IllegalStateException("Error accessing cache field ", e);
         }
     }
 
     class CopyStoreJob implements Runnable {
 
         private final Config sourceConfig;
-        private final Config targetConfig;
+        private final BatchInserter sourceDb;
+        private final BatchInserter targetDb;
 
         public CopyStoreJob() {
             // check source directory
@@ -173,11 +174,10 @@ public class StoreCopy implements Runnable {
             sourceConfig = sourceCfgBld.build();
 
             // change the target directory for the data
-            this.targetConfig =
-                    Config.newBuilder()
-                            .fromConfig(this.sourceConfig)
-                            .set(data_directory, targetDataDirectory.toPath())
-                            .build();
+            final Config targetConfig = Config.newBuilder()
+                .fromConfig(this.sourceConfig)
+                .set(data_directory, targetDataDirectory.toPath())
+                .build();
 
             final var srcPath = this.sourceConfig.get(data_directory);
 
@@ -194,31 +194,35 @@ public class StoreCopy implements Runnable {
             if (!deleteLabels.isEmpty()) {
                 println("Delete nodes with label(s): %s", ignoreRelationshipTypes);
             }
-            // println("Keep node IDs: %s", keepNodeIds);
+
+            // create inserters
+            this.sourceDb = newBatchInserter(sourceConfig);
+            this.targetDb = newBatchInserter(targetConfig);
         }
 
         @Override
         public void run() {
             final HighestInfo highestInfo = getHighestNodeId();
-            // build source database management
 
-            final var sourceDb = newBatchInserter(sourceConfig);
-            final var targetDb = newBatchInserter(targetConfig);
+            // copy nodes from source to target
+            final LongLongMap copiedNodeIds = copyNodes(highestInfo.nodeId);
 
-            final var copiedNodeIds = copyNodes(sourceDb, targetDb, highestInfo.nodeId);
+            // copy relationships from source to target
+            copyRelationships(copiedNodeIds, highestInfo.relationshipId);
 
-            copyRelationships(sourceDb, targetDb, copiedNodeIds, highestInfo.relationshipId);
-            println("Stopping target database");
-            targetDb.shutdown();
-            println("Stopped target database");
+            // shutdown the batch inserter
+            shutdown(targetDb, "target");
+            shutdown(sourceDb, "source");
+        }
 
+        void shutdown(BatchInserter inserter, String name) {
             try {
-                println("Stopping source database");
-                sourceDb.shutdown();
+                println("Stopping '%s' database", name);
+                inserter.shutdown();
             } catch (Exception e) {
-                log.error("Error while stopping source database.", e);
+                log.error("Error while stopping '" + name + "' database.", e);
             }
-            println("Stopped source database");
+            println("Stopped '%s' database", name);
         }
 
         BatchInserter newBatchInserter(Config config) {
@@ -259,8 +263,7 @@ public class StoreCopy implements Runnable {
             return new HighestInfo(highestNodeId, highestRelId);
         }
 
-        private LongLongMap copyNodes(
-                BatchInserter sourceDb, BatchInserter targetDb, long highestNodeId) {
+        private LongLongMap copyNodes(long highestNodeId) {
             final var copiedNodes = new LongLongHashMap(10_000_000);
 
             long time = System.currentTimeMillis();
@@ -339,11 +342,7 @@ public class StoreCopy implements Runnable {
             return false;
         }
 
-        void copyRelationships(
-                BatchInserter sourceDb,
-                BatchInserter targetDb,
-                LongLongMap copiedNodeIds,
-                long highestRelId) {
+        void copyRelationships(LongLongMap copiedNodeIds, long highestRelId) {
 
             long time = System.currentTimeMillis();
             long relId = 0;
