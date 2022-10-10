@@ -194,7 +194,7 @@ public class StoreCopy implements Runnable {
             if (!deleteLabels.isEmpty()) {
                 println("Delete nodes with label(s): %s", ignoreRelationshipTypes);
             }
-            //println("Keep node IDs: %s", keepNodeIds);
+            // println("Keep node IDs: %s", keepNodeIds);
         }
 
         @Override
