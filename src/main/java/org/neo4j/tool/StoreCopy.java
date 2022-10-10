@@ -332,24 +332,6 @@ public class StoreCopy implements Runnable {
             return copiedNodes;
         }
 
-        boolean createRelationship(
-                BatchInserter targetDb,
-                BatchInserter sourceDb,
-                BatchRelationship rel,
-                LongLongMap copiedNodeIds) {
-            try {
-                final long startNodeId = copiedNodeIds.get(rel.getStartNode());
-                final long endNodeId = copiedNodeIds.get(rel.getEndNode());
-                final RelationshipType type = rel.getType();
-                final var props = getProperties(sourceDb.getRelationshipProperties(rel.getId()));
-                targetDb.createRelationship(startNodeId, endNodeId, type, props);
-                return true;
-            } catch (Exception e) {
-                log.error("Failed to create relationship.", e);
-            }
-            return false;
-        }
-
         void copyRelationships(LongLongMap copiedNodeIds, long highestRelId) {
 
             long time = System.currentTimeMillis();
@@ -363,7 +345,7 @@ public class StoreCopy implements Runnable {
                     final var rel = sourceDb.getRelationshipById(relId++);
                     if (ignoreRelationshipTypes.contains(rel.getType().name())) {
                         removed++;
-                    } else if (!createRelationship(targetDb, sourceDb, rel, copiedNodeIds)) {
+                    } else if (!createRelationship(rel, copiedNodeIds)) {
                         removed++;
                     }
                 } catch (Exception e) {
@@ -399,6 +381,20 @@ public class StoreCopy implements Runnable {
                     percent(notFound, relId),
                     removed,
                     percent(removed, relId));
+        }
+
+        boolean createRelationship(BatchRelationship rel, LongLongMap copiedNodeIds) {
+            try {
+                final long startNodeId = copiedNodeIds.get(rel.getStartNode());
+                final long endNodeId = copiedNodeIds.get(rel.getEndNode());
+                final RelationshipType type = rel.getType();
+                final var props = getProperties(sourceDb.getRelationshipProperties(rel.getId()));
+                targetDb.createRelationship(startNodeId, endNodeId, type, props);
+                return true;
+            } catch (Exception e) {
+                log.error("Failed to create relationship.", e);
+            }
+            return false;
         }
     }
 
