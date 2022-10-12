@@ -6,6 +6,8 @@ import static org.neo4j.configuration.GraphDatabaseSettings.pagecache_direct_io;
 import static org.neo4j.configuration.GraphDatabaseSettings.pagecache_memory;
 import static org.neo4j.internal.recordstorage.RecordIdType.NODE;
 import static org.neo4j.internal.recordstorage.RecordIdType.RELATIONSHIP;
+import static org.neo4j.tool.Print.printf;
+import static org.neo4j.tool.Print.println;
 
 import java.io.File;
 import java.io.IOException;
@@ -98,13 +100,7 @@ public class StoreCopy implements Runnable {
         System.exit(exitCode);
     }
 
-    static void println(String fmt, Object... args) {
-        System.out.printf(fmt + "%n", args);
-    }
 
-    static void printf(String fmt, Object... args) {
-        System.out.printf(fmt + "%n", args);
-    }
 
     @Override
     public void run() {

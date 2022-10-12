@@ -1,3 +1,22 @@
+NOTES:
+
+// clear all indexes and constraints (quickly)
+CALL apoc.schema.assert({},{},true) YIELD label, key RETURN *;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ## Notice
 
 Please download a released version, else you must have Apache Maven. (Apache Maven not installed)
