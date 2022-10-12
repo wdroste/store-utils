@@ -2,7 +2,6 @@ package org.neo4j.tool;
 
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 
 public class IndexData {
 
@@ -18,16 +17,17 @@ public class IndexData {
     private final List<String> properties;
     private final String indexProvider;
 
-    public IndexData(long id,
-                     String name,
-                     String state,
-                     float populationPercent,
-                     boolean uniqueness,
-                     String type,
-                     String entityType,
-                     List<String> labelsOrTypes,
-                     List<String> properties,
-                     String indexProvider) {
+    public IndexData(
+            long id,
+            String name,
+            String state,
+            float populationPercent,
+            boolean uniqueness,
+            String type,
+            String entityType,
+            List<String> labelsOrTypes,
+            List<String> properties,
+            String indexProvider) {
         this.id = id;
         this.name = name;
         this.state = state;
@@ -90,35 +90,60 @@ public class IndexData {
         }
         IndexData indexData = (IndexData) o;
         return id == indexData.id
-               && Float.compare(indexData.populationPercent, populationPercent) == 0
-               && uniqueness == indexData.uniqueness
-               && name.equals(indexData.name)
-               && state.equals(indexData.state)
-               && type.equals(indexData.type)
-               && entityType.equals(indexData.entityType)
-               && labelsOrTypes.equals(indexData.labelsOrTypes)
-               && properties.equals(indexData.properties)
-               && indexProvider.equals(indexData.indexProvider);
+                && Float.compare(indexData.populationPercent, populationPercent) == 0
+                && uniqueness == indexData.uniqueness
+                && name.equals(indexData.name)
+                && state.equals(indexData.state)
+                && type.equals(indexData.type)
+                && entityType.equals(indexData.entityType)
+                && labelsOrTypes.equals(indexData.labelsOrTypes)
+                && properties.equals(indexData.properties)
+                && indexProvider.equals(indexData.indexProvider);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, name, state, populationPercent, uniqueness, type, entityType, labelsOrTypes, properties, indexProvider);
+        return Objects.hash(
+                id,
+                name,
+                state,
+                populationPercent,
+                uniqueness,
+                type,
+                entityType,
+                labelsOrTypes,
+                properties,
+                indexProvider);
     }
 
     @Override
     public String toString() {
-        return "IndexData{" +
-               "id=" + id +
-               ", name='" + name + '\'' +
-               ", state='" + state + '\'' +
-               ", populationPercent=" + populationPercent +
-               ", uniqueness=" + uniqueness +
-               ", type='" + type + '\'' +
-               ", entityType='" + entityType + '\'' +
-               ", labelsOrTypes=" + labelsOrTypes +
-               ", properties=" + properties +
-               ", indexProvider='" + indexProvider + '\'' +
-               '}';
+        return "IndexData{"
+                + "id="
+                + id
+                + ", name='"
+                + name
+                + '\''
+                + ", state='"
+                + state
+                + '\''
+                + ", populationPercent="
+                + populationPercent
+                + ", uniqueness="
+                + uniqueness
+                + ", type='"
+                + type
+                + '\''
+                + ", entityType='"
+                + entityType
+                + '\''
+                + ", labelsOrTypes="
+                + labelsOrTypes
+                + ", properties="
+                + properties
+                + ", indexProvider='"
+                + indexProvider
+                + '\''
+                + '}';
     }
 }

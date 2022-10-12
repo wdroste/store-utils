@@ -1,30 +1,25 @@
 package org.neo4j.tool;
 
+import static java.util.stream.Collectors.joining;
+
+import com.google.gson.GsonBuilder;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
-
-import com.google.gson.GsonBuilder;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
+import me.tongfei.progressbar.ProgressBar;
+import me.tongfei.progressbar.ProgressBarBuilder;
+import me.tongfei.progressbar.ProgressBarStyle;
 import org.neo4j.driver.Driver;
 import org.neo4j.driver.Session;
 import org.neo4j.driver.summary.ResultSummary;
 import org.neo4j.internal.helpers.collection.Iterables;
-
-import me.tongfei.progressbar.ProgressBar;
-import me.tongfei.progressbar.ProgressBarBuilder;
-import me.tongfei.progressbar.ProgressBarStyle;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
-
-import static java.util.stream.Collectors.joining;
 
 /**
  * Takes a dump file and creates each of the constraints and indexes from that file in a controlled
@@ -33,23 +28,23 @@ import static java.util.stream.Collectors.joining;
  * be refreshed again.
  */
 @Command(
-    name = "loadIndex",
-    version = "loadIndex 1.0",
-    description = "Creates indexes and constraints based on the file provided.")
+        name = "loadIndex",
+        version = "loadIndex 1.0",
+        description = "Creates indexes and constraints based on the file provided.")
 public class LoadIndex extends AbstractIndexCommand {
 
     private static final Logger LOG = LoggerFactory.getLogger(LoadIndex.class);
 
     @Option(
-        required = true,
-        names = {"-f", "--filename"},
-        description = "Name of the file to load all the indexes.",
-        defaultValue = "dump.json")
+            required = true,
+            names = {"-f", "--filename"},
+            description = "Name of the file to load all the indexes.",
+            defaultValue = "dump.json")
     protected String filename;
 
     @Option(
-        names = {"-r", "--recreate"},
-        description = "Recreate each of the indexes in the file.")
+            names = {"-r", "--recreate"},
+            description = "Recreate each of the indexes in the file.")
     protected boolean recreate;
 
     // this example implements Callable, so parsing, error handling and handling user
@@ -100,8 +95,7 @@ public class LoadIndex extends AbstractIndexCommand {
                 final var index = gson.fromJson(line, IndexData.class);
                 ret.add(index);
             }
-        }
-        catch (IOException ioe) {
+        } catch (IOException ioe) {
             throw new IllegalStateException(ioe);
         }
         return ret;
@@ -120,20 +114,21 @@ public class LoadIndex extends AbstractIndexCommand {
     }
 
     String indexQuery(IndexData indexData) {
-        final String CNT_FMT = "CREATE CONSTRAINT %s IF NOT EXISTS FOR (n:`%s`) REQUIRE n.%s IS UNIQUE;";
+        final String CNT_FMT =
+                "CREATE CONSTRAINT %s IF NOT EXISTS FOR (n:`%s`) REQUIRE n.%s IS UNIQUE;";
         final String IDX_FMT = "CREATE INDEX %s IF NOT EXISTS FOR (n:`%s`) ON (%s);";
 
         final String name = indexData.getName();
         final String label = Iterables.firstOrNull(indexData.getLabelsOrTypes());
         final String firstProp = Iterables.firstOrNull(indexData.getProperties());
 
-        final String properties = indexData.getProperties().stream()
-            .map(p -> "n.`" + p + "`")
-            .collect(joining(","));
+        final String properties =
+                indexData.getProperties().stream().map(p -> "n.`" + p + "`").collect(joining(","));
 
-        final String query = indexData.isUniqueness()
-                             ? String.format(CNT_FMT, name, label, firstProp)
-                             : String.format(IDX_FMT, name, label, properties);
+        final String query =
+                indexData.isUniqueness()
+                        ? String.format(CNT_FMT, name, label, firstProp)
+                        : String.format(IDX_FMT, name, label, properties);
         LOG.debug(query);
         return query;
     }
@@ -144,11 +139,11 @@ public class LoadIndex extends AbstractIndexCommand {
         try (Session session = driver.session()) {
             assert session != null;
             return session.readTransaction(
-                tx -> {
-                    final var result = tx.run(String.format(FMT, name));
-                    final var record = Iterables.firstOrNull(result.list());
-                    return (null == record) ? 0 : record.get(0).asFloat();
-                });
+                    tx -> {
+                        final var result = tx.run(String.format(FMT, name));
+                        final var record = Iterables.firstOrNull(result.list());
+                        return (null == record) ? 0 : record.get(0).asFloat();
+                    });
         }
     }
 }

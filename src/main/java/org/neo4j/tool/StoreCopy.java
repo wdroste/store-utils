@@ -100,8 +100,6 @@ public class StoreCopy implements Runnable {
         System.exit(exitCode);
     }
 
-
-
     @Override
     public void run() {
         new CopyStoreJob().run();

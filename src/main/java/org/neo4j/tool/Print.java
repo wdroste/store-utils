@@ -8,5 +8,4 @@ public class Print {
     public static void printf(String fmt, Object... args) {
         System.out.printf(fmt + "%n", args);
     }
-
 }
