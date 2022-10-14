@@ -2,14 +2,10 @@ package org.neo4j.tool;
 
 import static org.neo4j.tool.Print.println;
 
-import com.google.gson.GsonBuilder;
-import java.io.BufferedWriter;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.neo4j.driver.Driver;
-import org.neo4j.driver.Session;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -27,11 +23,15 @@ import picocli.CommandLine.Option;
 public class DumpIndex extends AbstractIndexCommand {
 
     @Option(
-            required = false,
             names = {"-f", "--filename"},
             description = "Name of the file to dump.",
             defaultValue = "dump.json")
     protected String filename;
+
+    @Option(
+            names = {"-l", "--lucene"},
+            description = "Replace any index containing a property name with a Lucene index")
+    protected Set<String> lucene;
 
     // this example implements Callable, so parsing, error handling and handling user
     // requests for usage help or version help can be done with one line of code.
@@ -43,31 +43,38 @@ public class DumpIndex extends AbstractIndexCommand {
     @Override
     void execute(final Driver driver) {
         // query for all the indexes
-        try (Session session = driver.session()) {
-            assert session != null;
-            final var indexes =
-                    session.readTransaction(
-                            tx -> {
-                                final List<IndexData> indexData = new ArrayList<>();
-                                final var result = tx.run("show indexes;");
-                                result.forEachRemaining(
-                                        record -> indexData.add(fromRecord(record)));
-                                return indexData;
-                            });
-            println("Building index file: %s", this.filename);
-            writeIndexes(indexes);
-        }
+        final var indexes = readIndexes(driver);
+        println("Building index file: %s", this.filename);
+        final var writeIdxes = lucene.isEmpty() ? indexes : luceneIndex(indexes);
+        writeIndexes(writeIdxes);
     }
 
-    void writeIndexes(List<IndexData> indexes) {
-        final var gson = new GsonBuilder().create();
-        try (final var wrt = new BufferedWriter(new FileWriter(this.filename))) {
-            for (IndexData index : indexes) {
-                wrt.write(gson.toJson(index));
-                wrt.newLine();
-            }
-        } catch (IOException ioe) {
-            throw new IllegalStateException(ioe);
-        }
+    /** Substitute the index for lucene */
+    private List<IndexData> luceneIndex(List<IndexData> indexes) {
+        return indexes.stream().map(this::checkLucene).collect(Collectors.toList());
+    }
+
+    IndexData checkLucene(IndexData idx) {
+        boolean l = idx.getProperties().stream().anyMatch(p -> lucene.contains(p));
+        return l ? modifyIndexProvider(idx, "lucene+native-3.0") : idx;
+    }
+
+    IndexData modifyIndexProvider(IndexData data, String provider) {
+        return new IndexData(
+                data.getId(),
+                data.getName(),
+                data.getState(),
+                data.getPopulationPercent(),
+                data.isUniqueness(),
+                data.getType(),
+                data.getEntityType(),
+                data.getLabelsOrTypes(),
+                data.getProperties(),
+                provider);
+    }
+
+    @Override
+    String getFilename() {
+        return this.filename;
     }
 }

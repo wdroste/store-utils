@@ -76,11 +76,6 @@
             <artifactId>gson</artifactId>
             <version>2.9.1</version>
         </dependency>
-        <dependency>
-            <groupId>me.tongfei</groupId>
-            <artifactId>progressbar</artifactId>
-            <version>0.9.4</version>
-        </dependency>
     </dependencies>
     <build>
         <plugins>
@@ -126,6 +121,14 @@
                         <program>
                             <name>copy</name>
                             <mainClass>org.neo4j.tool.StoreCopy</mainClass>
+                        </program>
+                        <program>
+                            <name>dump</name>
+                            <mainClass>org.neo4j.tool.DumpIndex</mainClass>
+                        </program>
+                        <program>
+                            <name>load</name>
+                            <mainClass>org.neo4j.tool.LoadIndex</mainClass>
                         </program>
                     </programs>
                     <repositoryLayout>flat</repositoryLayout>
