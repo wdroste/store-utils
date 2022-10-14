@@ -1,17 +1,15 @@
 package org.neo4j.tool;
 
-import java.util.List;
+import static java.util.stream.Collectors.toUnmodifiableSet;
+import static org.neo4j.tool.Print.println;
 
+import java.util.List;
+import org.neo4j.driver.Driver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import org.neo4j.driver.Driver;
-
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
-
-import static java.util.stream.Collectors.toUnmodifiableSet;
 
 /**
  * Takes a dump file and creates each of the constraints and indexes from that file in a controlled
@@ -48,9 +46,13 @@ public class LoadIndex extends AbstractIndexCommand {
 
     @Override
     void execute(final Driver driver) {
-        final var fileIndexes = recreate ? List.<IndexData>of() : readIndexesFromFilename();
+        final var fileIndexes = readIndexesFromFilename();
         final var indexNames =
-                readIndexes(driver).stream().map(IndexData::getName).collect(toUnmodifiableSet());
+                recreate
+                        ? List.<IndexData>of()
+                        : readIndexes(driver).stream()
+                                .map(IndexData::getName)
+                                .collect(toUnmodifiableSet());
 
         for (final IndexData indexData : fileIndexes) {
             // filter TOKEN
@@ -81,6 +83,7 @@ public class LoadIndex extends AbstractIndexCommand {
     void dropIndex(Driver driver, IndexData indexData) {
         // query for all the indexes
         final var query = dropQuery(indexData);
+        println(query);
         try {
             writeTransaction(driver, query);
         } catch (Throwable th) {

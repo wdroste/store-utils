@@ -132,6 +132,7 @@ abstract class AbstractIndexCommand implements Runnable {
 
     void indexCreate(final Driver driver, IndexData index) {
         final var query = indexQuery(index);
+        println(query);
         try {
             writeTransaction(driver, query);
         } catch (Throwable th) {
@@ -165,12 +166,9 @@ abstract class AbstractIndexCommand implements Runnable {
         final String properties =
                 indexData.getProperties().stream().map(propFx).collect(joining(","));
 
-        final String query =
-                indexData.isUniqueness()
-                        ? String.format(CNT_FMT, name, label, firstProp)
-                        : String.format(IDX_FMT, name, label, properties, indexProvider);
-        println(query);
-        return query;
+        return indexData.isUniqueness()
+                ? String.format(CNT_FMT, name, label, firstProp)
+                : String.format(IDX_FMT, name, label, properties, indexProvider);
     }
 
     float indexProgress(final Driver driver, String name) {

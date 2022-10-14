@@ -9,7 +9,7 @@ CALL apoc.schema.assert({},{},true) YIELD label, key RETURN *;
 
 
 
-
+./bin/dump -n -l __appName__ -l __dataModel__ -l lastSyncTransactionId -l lastSyncDatasourceId -l lastSyncDatasource -l createdBy -l updatedBy
 
 
 
