@@ -3,7 +3,6 @@ package org.neo4j.tool;
 import static java.util.stream.Collectors.toUnmodifiableSet;
 import static org.neo4j.tool.Print.println;
 
-import java.util.List;
 import java.util.Set;
 import org.neo4j.driver.Driver;
 import org.slf4j.Logger;
@@ -47,10 +46,8 @@ public class LoadIndex extends AbstractIndexCommand {
 
     @Override
     void execute(final Driver driver) {
-        final List<IndexData> fileIndexes = readIndexesFromFilename();
         final Set<String> indexNames = recreate ? Set.of() : readIndexNames(driver);
-
-        fileIndexes.stream()
+        readIndexesFromFilename().stream()
                 .filter(indexData -> !indexData.getLabelsOrTypes().isEmpty())
                 .filter(indexData -> !indexNames.contains(indexData.getName()))
                 .forEach(indexData -> build(driver, indexData));
