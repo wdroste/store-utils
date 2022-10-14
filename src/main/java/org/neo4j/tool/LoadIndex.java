@@ -4,6 +4,8 @@ import static java.util.stream.Collectors.toUnmodifiableSet;
 import static org.neo4j.tool.Print.println;
 
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import org.neo4j.driver.Driver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,11 +48,17 @@ public class LoadIndex extends AbstractIndexCommand {
 
     @Override
     void execute(final Driver driver) {
-        final Set<String> indexNames = recreate ? Set.of() : readIndexNames(driver);
-        readIndexesFromFilename().stream()
+        final var indexNames = recreate ? Set.<String>of() : readIndexNames(driver);
+        final var fileIndexes = readIndexesFromFilename();
+        final int total = fileIndexes.size();
+        final var count = new AtomicInteger();
+        fileIndexes.stream()
                 .filter(indexData -> !indexData.getLabelsOrTypes().isEmpty())
                 .filter(indexData -> !indexNames.contains(indexData.getName()))
-                .forEach(indexData -> build(driver, indexData));
+                .forEach(indexData -> {
+                    println("Progress: %d/%d", count.getAndIncrement(), total);
+                    build(driver, indexData);
+                });
     }
 
     Set<String> readIndexNames(final Driver driver) {

@@ -2,7 +2,9 @@ package org.neo4j.tool;
 
 import static org.neo4j.tool.Print.println;
 
+import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.neo4j.driver.Driver;
@@ -43,10 +45,28 @@ public class DumpIndex extends AbstractIndexCommand {
     @Override
     void execute(final Driver driver) {
         // query for all the indexes
-        final var indexes = readIndexes(driver);
+        final List<IndexData> indexes = readIndexes(driver);
         println("Building index file: %s", this.filename);
-        final var writeIdxes = lucene.isEmpty() ? indexes : luceneIndex(indexes);
-        writeIndexes(writeIdxes);
+        final List<IndexData> writeIndexes = lucene.isEmpty() ? indexes : luceneIndex(indexes);
+        final List<IndexData> sortedIndexes = writeIndexes.stream().sorted(labelSort()).collect(Collectors.toList());
+        writeIndexes(sortedIndexes);
+    }
+
+    Comparator<IndexData> labelSort() {
+        return (o1, o2) -> {
+            String l1 = nullOrEmpty(o1.getLabelsOrTypes());
+            String l2 = nullOrEmpty(o2.getLabelsOrTypes());
+            int cmp = l1.compareTo(l2);
+            if (0 != cmp) {
+                return cmp;
+            }
+            String p1 = nullOrEmpty(o1.getProperties());
+            String p2 = nullOrEmpty(o2.getProperties());
+            return Objects.compare(p1, p2, String::compareTo);
+        };
+    }
+    String nullOrEmpty(List<String> list) {
+        return list.isEmpty() ? "" : list.stream().sorted().findFirst().get();
     }
 
     /** Substitute the index for lucene */
