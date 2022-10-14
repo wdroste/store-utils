@@ -4,6 +4,7 @@ import static java.util.stream.Collectors.toUnmodifiableSet;
 import static org.neo4j.tool.Print.println;
 
 import java.util.List;
+import java.util.Set;
 import org.neo4j.driver.Driver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,37 +47,32 @@ public class LoadIndex extends AbstractIndexCommand {
 
     @Override
     void execute(final Driver driver) {
-        final var fileIndexes = readIndexesFromFilename();
-        final var indexNames =
-                recreate
-                        ? List.<IndexData>of()
-                        : readIndexes(driver).stream()
-                                .map(IndexData::getName)
-                                .collect(toUnmodifiableSet());
+        final List<IndexData> fileIndexes = readIndexesFromFilename();
+        final Set<String> indexNames = recreate ? Set.of() : readIndexNames(driver);
 
-        for (final IndexData indexData : fileIndexes) {
-            // filter TOKEN
-            if (indexData.getLabelsOrTypes().isEmpty()) {
-                continue;
-            }
-            // already there
-            if (indexNames.contains(indexData.getName())) {
-                continue;
-            }
+        fileIndexes.stream()
+                .filter(indexData -> !indexData.getLabelsOrTypes().isEmpty())
+                .filter(indexData -> !indexNames.contains(indexData.getName()))
+                .forEach(indexData -> build(driver, indexData));
+    }
 
-            if (recreate) {
-                dropIndex(driver, indexData);
-            }
+    Set<String> readIndexNames(final Driver driver) {
+        return readIndexes(driver).stream().map(IndexData::getName).collect(toUnmodifiableSet());
+    }
 
-            indexCreate(driver, indexData);
+    void build(final Driver driver, final IndexData indexData) {
+        if (recreate) {
+            dropIndex(driver, indexData);
+        }
 
-            // wait for completion
-            int pct = 0;
-            while (pct < 100) {
-                progressPercentage(pct);
-                pct = (int) indexProgress(driver, indexData.getName());
-                progressPercentage(pct);
-            }
+        indexCreate(driver, indexData);
+
+        // wait for completion
+        int pct = 0;
+        while (pct < 100) {
+            progressPercentage(pct);
+            pct = (int) indexProgress(driver, indexData.getName());
+            progressPercentage(pct);
         }
     }
 
