@@ -5,7 +5,6 @@ import static org.neo4j.tool.Print.println;
 
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import org.neo4j.driver.Driver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,10 +54,11 @@ public class LoadIndex extends AbstractIndexCommand {
         fileIndexes.stream()
                 .filter(indexData -> !indexData.getLabelsOrTypes().isEmpty())
                 .filter(indexData -> !indexNames.contains(indexData.getName()))
-                .forEach(indexData -> {
-                    println("Progress: %d/%d", count.getAndIncrement(), total);
-                    build(driver, indexData);
-                });
+                .forEach(
+                        indexData -> {
+                            println("Progress: %d/%d", count.getAndIncrement(), total);
+                            build(driver, indexData);
+                        });
     }
 
     Set<String> readIndexNames(final Driver driver) {
@@ -79,22 +79,6 @@ public class LoadIndex extends AbstractIndexCommand {
             pct = (int) indexProgress(driver, indexData.getName());
             progressPercentage(pct);
         }
-    }
-
-    void dropIndex(Driver driver, IndexData indexData) {
-        // query for all the indexes
-        final var query = dropQuery(indexData);
-        println(query);
-        try {
-            writeTransaction(driver, query);
-        } catch (Throwable th) {
-            LOG.error("Failed to drop index: {}", query, th);
-        }
-    }
-
-    String dropQuery(IndexData data) {
-        final var FMT = data.isUniqueness() ? "DROP CONSTRAINT %s" : "DROP INDEX %s";
-        return String.format(FMT, data.getName());
     }
 
     @Override

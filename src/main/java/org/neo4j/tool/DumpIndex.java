@@ -48,7 +48,8 @@ public class DumpIndex extends AbstractIndexCommand {
         final List<IndexData> indexes = readIndexes(driver);
         println("Building index file: %s", this.filename);
         final List<IndexData> writeIndexes = lucene.isEmpty() ? indexes : luceneIndex(indexes);
-        final List<IndexData> sortedIndexes = writeIndexes.stream().sorted(labelSort()).collect(Collectors.toList());
+        final List<IndexData> sortedIndexes =
+                writeIndexes.stream().sorted(labelSort()).collect(Collectors.toList());
         writeIndexes(sortedIndexes);
     }
 
@@ -65,6 +66,7 @@ public class DumpIndex extends AbstractIndexCommand {
             return Objects.compare(p1, p2, String::compareTo);
         };
     }
+
     String nullOrEmpty(List<String> list) {
         return list.isEmpty() ? "" : list.stream().sorted().findFirst().get();
     }

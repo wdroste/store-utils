@@ -6,6 +6,7 @@ import static org.neo4j.tool.Print.println;
 import com.google.gson.GsonBuilder;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -117,9 +118,13 @@ abstract class AbstractIndexCommand implements Runnable {
     }
 
     List<IndexData> readIndexesFromFilename() {
+        return readIndexesFromFile(new File(this.getFilename()));
+    }
+
+    List<IndexData> readIndexesFromFile(File f) {
         final var ret = new ArrayList<IndexData>();
         final var gson = new GsonBuilder().create();
-        try (final var rdr = new BufferedReader(new FileReader(getFilename()))) {
+        try (final var rdr = new BufferedReader(new FileReader(f))) {
             for (String line = rdr.readLine(); line != null; line = rdr.readLine()) {
                 final var index = gson.fromJson(line, IndexData.class);
                 ret.add(index);
@@ -207,6 +212,22 @@ abstract class AbstractIndexCommand implements Runnable {
                         result.forEachRemaining(record -> indexData.add(fromRecord(record)));
                         return indexData;
                     });
+        }
+    }
+
+    String dropQuery(IndexData data) {
+        final var FMT = data.isUniqueness() ? "DROP CONSTRAINT %s" : "DROP INDEX %s";
+        return String.format(FMT, data.getName());
+    }
+
+    void dropIndex(Driver driver, IndexData indexData) {
+        // query for all the indexes
+        final var query = dropQuery(indexData);
+        println(query);
+        try {
+            writeTransaction(driver, query);
+        } catch (Throwable th) {
+            LOG.error("Failed to drop index: {}", query, th);
         }
     }
 }
