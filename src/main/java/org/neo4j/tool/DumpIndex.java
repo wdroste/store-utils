@@ -47,7 +47,8 @@ public class DumpIndex extends AbstractIndexCommand {
         // query for all the indexes
         final List<IndexData> indexes = readIndexes(driver);
         println("Building index file: %s", this.filename);
-        final List<IndexData> writeIndexes = lucene.isEmpty() ? indexes : luceneIndex(indexes);
+        final List<IndexData> writeIndexes =
+                (lucene == null || lucene.isEmpty()) ? indexes : luceneIndex(indexes);
         final List<IndexData> sortedIndexes =
                 writeIndexes.stream().sorted(labelSort()).collect(Collectors.toList());
         writeIndexes(sortedIndexes);

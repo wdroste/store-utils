@@ -32,7 +32,6 @@ abstract class AbstractIndexCommand implements Runnable {
     private static final Logger LOG = LoggerFactory.getLogger(AbstractIndexCommand.class);
 
     @Option(
-            defaultValue = "true",
             names = {"-n", "--no_auth"},
             description = "No authentication.")
     protected boolean noAuth;
@@ -72,8 +71,10 @@ abstract class AbstractIndexCommand implements Runnable {
             try {
                 final var config = Config.defaultConfig();
                 if (noAuth) {
+                    println("Attempting to connect without authentication.");
                     return GraphDatabase.driver(uri, config);
                 }
+                println("Attempting to connect with basic authentication.");
                 final var token = AuthTokens.basic(username, password);
                 return GraphDatabase.driver(uri, token, config);
             } catch (ServiceUnavailableException ex) {
