@@ -38,4 +38,4 @@ jobs:
       uses: actions/upload-artifact@v2
       with: 
         name: assets-for-download
-        path: targets/distributions/*.zip      
+        path: target/distributions/*.zip      
