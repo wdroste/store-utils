@@ -16,9 +16,9 @@ pipelines:
             - maven
           script:
             - mvn -B verify --file pom.xml
-          after-script:
-              # Collect checkstyle results, if any, and convert to Bitbucket Code Insights.
-            - pipe: atlassian/checkstyle-report:0.3.0
+          artifacts:
+            - target/store-utils*.zip
+            - target/store-utils*.tar
       - step:
           name: Security Scan
           script:
