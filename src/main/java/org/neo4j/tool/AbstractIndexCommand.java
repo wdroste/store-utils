@@ -58,10 +58,12 @@ abstract class AbstractIndexCommand implements Runnable {
     public void run() {
         try (final var driver = buildDriver(uri, username, password, noAuth)) {
             execute(driver);
+        } catch (IOException ioe) {
+            throw new IllegalStateException(ioe);
         }
     }
 
-    abstract void execute(Driver driver);
+    abstract void execute(Driver driver) throws IOException;
 
     abstract String getFilename();
 
@@ -136,13 +138,25 @@ abstract class AbstractIndexCommand implements Runnable {
         return ret;
     }
 
-    void indexCreate(final Driver driver, IndexData index) {
+    void createIndex(final Driver driver, IndexData index) {
         final var query = indexQuery(index);
         println(query);
         try {
             writeTransaction(driver, query);
         } catch (Throwable th) {
             LOG.error("Failed to create index: {}", query, th);
+        }
+    }
+
+    void createIndexWaitForCompletion(final Driver driver, final IndexData index) {
+        createIndex(driver, index);
+
+        // wait for completion
+        int pct = 0;
+        while (pct < 100) {
+            progressPercentage(pct);
+            pct = (int) indexProgress(driver, index.getName());
+            progressPercentage(pct);
         }
     }
 

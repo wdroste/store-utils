@@ -65,20 +65,12 @@ public class LoadIndex extends AbstractIndexCommand {
         return readIndexes(driver).stream().map(IndexData::getName).collect(toUnmodifiableSet());
     }
 
-    void build(final Driver driver, final IndexData indexData) {
+    void build(final Driver driver, final IndexData index) {
         if (recreate) {
-            dropIndex(driver, indexData);
+            dropIndex(driver, index);
         }
 
-        indexCreate(driver, indexData);
-
-        // wait for completion
-        int pct = 0;
-        while (pct < 100) {
-            progressPercentage(pct);
-            pct = (int) indexProgress(driver, indexData.getName());
-            progressPercentage(pct);
-        }
+        createIndexWaitForCompletion(driver, index);
     }
 
     @Override

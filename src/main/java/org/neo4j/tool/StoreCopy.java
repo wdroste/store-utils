@@ -307,8 +307,7 @@ public class StoreCopy implements Runnable {
                     }
                 }
                 // increment here because it's still needed above
-                sourceNodeId++;
-                if (sourceNodeId % 10_000 == 0) {
+                if (++sourceNodeId % 10_000 == 0) {
                     flusher.flush();
                     System.out.print(".");
                 }
@@ -365,8 +364,7 @@ public class StoreCopy implements Runnable {
                     }
                 }
                 // increment here for counts, its still needed above
-                relId++;
-                if (relId % 10000 == 0) {
+                if (++relId % 10000 == 0) {
                     flusher.flush();
                     System.out.print(".");
                 }
