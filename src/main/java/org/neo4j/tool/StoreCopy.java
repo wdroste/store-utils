@@ -9,6 +9,7 @@ import static org.neo4j.internal.recordstorage.RecordIdType.RELATIONSHIP;
 import static org.neo4j.tool.Print.printf;
 import static org.neo4j.tool.Print.println;
 
+import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -102,7 +103,9 @@ public class StoreCopy implements Runnable {
 
     @Override
     public void run() {
-        new CopyStoreJob().run();
+        try (final var job = new CopyStoreJob()) {
+            job.run();
+        }
     }
 
     interface Flusher {
@@ -137,7 +140,7 @@ public class StoreCopy implements Runnable {
         }
     }
 
-    class CopyStoreJob implements Runnable {
+    class CopyStoreJob implements Runnable, Closeable {
 
         private final Config sourceConfig;
         private final HighestInfo highestInfo;
@@ -205,11 +208,14 @@ public class StoreCopy implements Runnable {
         @Override
         public void run() {
             // copy nodes from source to target
-            final LongLongMap copiedNodeIds = copyNodes(highestInfo.nodeId);
+            final LongLongMap copiedNodeIds = copyNodes();
 
             // copy relationships from source to target
-            copyRelationships(copiedNodeIds, highestInfo.relationshipId);
+            copyRelationships(copiedNodeIds);
+        }
 
+        @Override
+        public void close() {
             // shutdown the batch inserter
             shutdown(targetDb, "target");
             shutdown(sourceDb, "source");
@@ -265,27 +271,29 @@ public class StoreCopy implements Runnable {
             return new HighestInfo(highestNodeId, highestRelId);
         }
 
-        private LongLongMap copyNodes(long highestNodeId) {
+        private LongLongMap copyNodes() {
             final var copiedNodes = new LongLongHashMap(10_000_000);
 
             long time = System.currentTimeMillis();
             long notFound = 0;
             long removed = 0;
-            long nodeId = 0;
+            long sourceNodeId = 0;
 
+            final var highestNodeId = this.highestInfo.nodeId;
             final Flusher flusher = newFlusher(sourceDb);
-            while (nodeId <= highestNodeId) {
+            while (sourceNodeId <= highestNodeId) {
                 try {
-                    if (!sourceDb.nodeExists(nodeId++)) {
+                    if (!sourceDb.nodeExists(sourceNodeId)) {
                         notFound++;
-                    } else if (labelInSet(sourceDb.getNodeLabels(nodeId), deleteLabels)) {
+                    } else if (labelInSet(sourceDb.getNodeLabels(sourceNodeId), deleteLabels)) {
                         removed++;
                     } else {
-                        long newNodeId =
-                                targetDb.createNode(
-                                        getProperties(sourceDb.getNodeProperties(nodeId)),
-                                        labelsArray(sourceDb, nodeId));
-                        copiedNodes.put(nodeId, newNodeId);
+                        final var srcProps = sourceDb.getNodeProperties(sourceNodeId);
+                        final var props = getProperties(srcProps);
+                        final var labels = labelsArray(sourceDb, sourceNodeId);
+
+                        long targetNodeId = targetDb.createNode(props, labels);
+                        copiedNodes.put(sourceNodeId, targetNodeId);
                     }
                 } catch (Exception e) {
                     if (e instanceof InvalidRecordException
@@ -294,49 +302,52 @@ public class StoreCopy implements Runnable {
                     } else {
                         log.error(
                                 "Failed to process, node ID: {} Message: {}",
-                                nodeId,
+                                sourceNodeId,
                                 e.getMessage());
                     }
                 }
-                if (nodeId % 10_000 == 0) {
+                // increment here because it's still needed above
+                sourceNodeId++;
+                if (sourceNodeId % 10_000 == 0) {
                     flusher.flush();
                     System.out.print(".");
                 }
-                if (nodeId % 500_000 == 0) {
+                if (sourceNodeId % 500_000 == 0) {
                     System.out.printf(
                             " %d / %d (%d%%) unused %d removed %d%n",
-                            nodeId,
+                            sourceNodeId,
                             highestNodeId,
-                            percent(nodeId, highestNodeId),
+                            percent(sourceNodeId, highestNodeId),
                             notFound,
                             removed);
                 }
             }
             time = Math.max(1, (System.currentTimeMillis() - time) / 1000);
             System.out.printf(
-                    "%nCopying to highest nodeId %d took %d seconds (%d rec/s). Unused Records %d (%d%%). Removed Records %d (%d%%). Total Copied: %d%n",
-                    nodeId,
+                    "%nCopying to highest sourceNodeId %d took %d seconds (%d rec/s). Unused Records %d (%d%%). Removed Records %d (%d%%). Total Copied: %d%n",
+                    sourceNodeId,
                     time,
-                    nodeId / time,
+                    sourceNodeId / time,
                     notFound,
-                    percent(notFound, nodeId),
+                    percent(notFound, sourceNodeId),
                     removed,
-                    percent(removed, nodeId),
+                    percent(removed, sourceNodeId),
                     copiedNodes.size());
             return copiedNodes;
         }
 
-        void copyRelationships(LongLongMap copiedNodeIds, long highestRelId) {
+        void copyRelationships(LongLongMap copiedNodeIds) {
 
             long time = System.currentTimeMillis();
             long relId = 0;
             long notFound = 0;
             long removed = 0;
 
+            final var highestRelId = this.highestInfo.relationshipId;
             final Flusher flusher = newFlusher(sourceDb);
             while (relId <= highestRelId) {
                 try {
-                    final var rel = sourceDb.getRelationshipById(relId++);
+                    final var rel = sourceDb.getRelationshipById(relId);
                     if (ignoreRelationshipTypes.contains(rel.getType().name())) {
                         removed++;
                     } else if (!createRelationship(rel, copiedNodeIds)) {
@@ -353,6 +364,8 @@ public class StoreCopy implements Runnable {
                                 e.getMessage());
                     }
                 }
+                // increment here for counts, its still needed above
+                relId++;
                 if (relId % 10000 == 0) {
                     flusher.flush();
                     System.out.print(".");
