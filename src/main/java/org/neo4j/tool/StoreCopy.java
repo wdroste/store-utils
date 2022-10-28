@@ -18,6 +18,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.LongStream;
 import org.eclipse.collections.api.map.primitive.LongLongMap;
 import org.eclipse.collections.impl.map.mutable.primitive.LongLongHashMap;
 import org.neo4j.batchinsert.BatchInserter;
@@ -275,62 +277,72 @@ public class StoreCopy implements Runnable {
             final var copiedNodes = new LongLongHashMap(10_000_000);
 
             long time = System.currentTimeMillis();
-            long notFound = 0;
-            long removed = 0;
-            long sourceNodeId = 0;
+            final var notFound = new AtomicLong();
+            final var removed = new AtomicLong();
 
             final var highestNodeId = this.highestInfo.nodeId;
             final Flusher flusher = newFlusher(sourceDb);
-            while (sourceNodeId <= highestNodeId) {
-                try {
-                    if (!sourceDb.nodeExists(sourceNodeId)) {
-                        notFound++;
-                    } else if (labelInSet(sourceDb.getNodeLabels(sourceNodeId), deleteLabels)) {
-                        removed++;
-                    } else {
-                        final var srcProps = sourceDb.getNodeProperties(sourceNodeId);
-                        final var props = getProperties(srcProps);
-                        final var labels = labelsArray(sourceDb, sourceNodeId);
 
-                        long targetNodeId = targetDb.createNode(props, labels);
-                        copiedNodes.put(sourceNodeId, targetNodeId);
-                    }
-                } catch (Exception e) {
-                    if (e instanceof InvalidRecordException
-                            && e.getMessage().endsWith("not in use")) {
-                        notFound++;
-                    } else {
-                        log.error(
-                                "Failed to process, node ID: {} Message: {}",
-                                sourceNodeId,
-                                e.getMessage());
-                    }
-                }
-                // increment here because it's still needed above
-                if (++sourceNodeId % 10_000 == 0) {
-                    flusher.flush();
-                    System.out.print(".");
-                }
-                if (sourceNodeId % 500_000 == 0) {
-                    System.out.printf(
-                            " %d / %d (%d%%) unused %d removed %d%n",
-                            sourceNodeId,
-                            highestNodeId,
-                            percent(sourceNodeId, highestNodeId),
-                            notFound,
-                            removed);
-                }
-            }
+            LongStream.range(0, highestNodeId + 1)
+                    .forEach(
+                            sourceNodeId -> {
+                                try {
+                                    if (!sourceDb.nodeExists(sourceNodeId)) {
+                                        notFound.incrementAndGet();
+                                    } else if (labelInSet(
+                                            sourceDb.getNodeLabels(sourceNodeId), deleteLabels)) {
+                                        removed.incrementAndGet();
+                                    } else {
+                                        final var srcProps =
+                                                sourceDb.getNodeProperties(sourceNodeId);
+                                        final var props = getProperties(srcProps);
+                                        final var labels = labelsArray(sourceDb, sourceNodeId);
+
+                                        long targetNodeId = targetDb.createNode(props, labels);
+                                        synchronized (StoreCopy.class) {
+                                            copiedNodes.put(sourceNodeId, targetNodeId);
+                                        }
+                                    }
+                                } catch (Exception e) {
+                                    if (e instanceof InvalidRecordException
+                                            && e.getMessage().endsWith("not in use")) {
+                                        notFound.incrementAndGet();
+                                    } else {
+                                        log.error(
+                                                "Failed to process, node ID: {} Message: {}",
+                                                sourceNodeId,
+                                                e.getMessage());
+                                    }
+                                }
+                                // increment here because it's still needed above
+                                synchronized (StoreCopy.class) {
+                                    if ((sourceNodeId + 1) % 10_000 == 0) {
+                                        flusher.flush();
+                                        printf(".");
+                                    }
+                                    if ((sourceNodeId + 1) % 500_000 == 0) {
+                                        println(
+                                                " %d / %d (%d%%) unused %d removed %d",
+                                                sourceNodeId,
+                                                highestNodeId,
+                                                percent(sourceNodeId, highestNodeId),
+                                                notFound.get(),
+                                                removed.get());
+                                    }
+                                }
+                            });
+
+            final var total = copiedNodes.size();
             time = Math.max(1, (System.currentTimeMillis() - time) / 1000);
-            System.out.printf(
-                    "%nCopying to highest sourceNodeId %d took %d seconds (%d rec/s). Unused Records %d (%d%%). Removed Records %d (%d%%). Total Copied: %d%n",
-                    sourceNodeId,
+            println(
+                    "%nCopying to highest sourceNodeId %d took %d seconds (%d rec/s). Unused Records %d (%d%%). Removed Records %d (%d%%). Total Copied: %d",
+                    total,
                     time,
-                    sourceNodeId / time,
-                    notFound,
-                    percent(notFound, sourceNodeId),
-                    removed,
-                    percent(removed, sourceNodeId),
+                    total / time,
+                    notFound.get(),
+                    percent(notFound.get(), total),
+                    removed.get(),
+                    percent(removed.get(), total),
                     copiedNodes.size());
             return copiedNodes;
         }
@@ -366,7 +378,7 @@ public class StoreCopy implements Runnable {
                 // increment here for counts, its still needed above
                 if (++relId % 10000 == 0) {
                     flusher.flush();
-                    System.out.print(".");
+                    printf(".");
                 }
                 if (relId % 500000 == 0) {
                     printf(
