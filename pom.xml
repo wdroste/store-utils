@@ -74,7 +74,7 @@
         <dependency>
             <groupId>com.google.code.gson</groupId>
             <artifactId>gson</artifactId>
-            <version>2.9.1</version>
+            <version>2.10</version>
         </dependency>
         <dependency>
             <groupId>org.apache.commons</groupId>
@@ -159,13 +159,17 @@
                             <name>drop</name>
                             <mainClass>org.neo4j.tool.DropIndex</mainClass>
                         </program>
+                        <program>
+                            <name>reindex</name>
+                            <mainClass>org.neo4j.tool.RebuildIndex</mainClass>
+                        </program>
                     </programs>
                     <repositoryLayout>flat</repositoryLayout>
                     <repositoryName>lib</repositoryName>
                     <assembleDirectory>${project.build.directory}/store-utils-${project.version}</assembleDirectory>
                     <defaultJvmSettings>
-                        <initialMemorySize>16g</initialMemorySize>
-                        <maxMemorySize>16g</maxMemorySize>
+                        <initialMemorySize>8g</initialMemorySize>
+                        <maxMemorySize>8g</maxMemorySize>
                     </defaultJvmSettings>
                 </configuration>
             </plugin>
