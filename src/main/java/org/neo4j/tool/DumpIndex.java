@@ -77,9 +77,9 @@ public class DumpIndex extends AbstractIndexCommand {
         return indexes.stream().map(this::checkLucene).collect(Collectors.toList());
     }
 
-    IndexData checkLucene(IndexData idx) {
-        boolean l = idx.getProperties().stream().anyMatch(p -> lucene.contains(p));
-        return l ? modifyIndexProvider(idx, "lucene+native-3.0") : idx;
+    IndexData checkLucene(IndexData index) {
+        boolean l = index.getProperties().stream().anyMatch(p -> lucene.contains(p));
+        return l ? modifyIndexProvider(index, "lucene+native-3.0") : index;
     }
 
     IndexData modifyIndexProvider(IndexData data, String provider) {

@@ -19,7 +19,6 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.LongStream;
 import org.eclipse.collections.api.map.primitive.LongLongMap;
 import org.eclipse.collections.impl.map.mutable.primitive.LongLongHashMap;
 import org.neo4j.batchinsert.BatchInserter;
@@ -283,54 +282,51 @@ public class StoreCopy implements Runnable {
             final var highestNodeId = this.highestInfo.nodeId;
             final Flusher flusher = newFlusher(sourceDb);
 
-            LongStream.range(0, highestNodeId + 1)
-                    .forEach(
-                            sourceNodeId -> {
-                                try {
-                                    if (!sourceDb.nodeExists(sourceNodeId)) {
-                                        notFound.incrementAndGet();
-                                    } else if (labelInSet(
-                                            sourceDb.getNodeLabels(sourceNodeId), deleteLabels)) {
-                                        removed.incrementAndGet();
-                                    } else {
-                                        final var srcProps =
-                                                sourceDb.getNodeProperties(sourceNodeId);
-                                        final var props = getProperties(srcProps);
-                                        final var labels = labelsArray(sourceDb, sourceNodeId);
+            long bound = highestNodeId + 1;
+            for (long sourceNodeId = 0; sourceNodeId < bound; sourceNodeId++) {
+                try {
+                    if (!sourceDb.nodeExists(sourceNodeId)) {
+                        notFound.incrementAndGet();
+                    } else if (labelInSet(sourceDb.getNodeLabels(sourceNodeId), deleteLabels)) {
+                        removed.incrementAndGet();
+                    } else {
+                        final var srcProps = sourceDb.getNodeProperties(sourceNodeId);
+                        final var props = getProperties(srcProps);
+                        final var labels = labelsArray(sourceDb, sourceNodeId);
 
-                                        long targetNodeId = targetDb.createNode(props, labels);
-                                        synchronized (StoreCopy.class) {
-                                            copiedNodes.put(sourceNodeId, targetNodeId);
-                                        }
-                                    }
-                                } catch (Exception e) {
-                                    if (e instanceof InvalidRecordException
-                                            && e.getMessage().endsWith("not in use")) {
-                                        notFound.incrementAndGet();
-                                    } else {
-                                        log.error(
-                                                "Failed to process, node ID: {} Message: {}",
-                                                sourceNodeId,
-                                                e.getMessage());
-                                    }
-                                }
-                                // increment here because it's still needed above
-                                synchronized (StoreCopy.class) {
-                                    if ((sourceNodeId + 1) % 10_000 == 0) {
-                                        flusher.flush();
-                                        printf(".");
-                                    }
-                                    if ((sourceNodeId + 1) % 500_000 == 0) {
-                                        println(
-                                                " %d / %d (%d%%) unused %d removed %d",
-                                                sourceNodeId,
-                                                highestNodeId,
-                                                percent(sourceNodeId, highestNodeId),
-                                                notFound.get(),
-                                                removed.get());
-                                    }
-                                }
-                            });
+                        long targetNodeId = targetDb.createNode(props, labels);
+                        synchronized (StoreCopy.class) {
+                            copiedNodes.put(sourceNodeId, targetNodeId);
+                        }
+                    }
+                } catch (Exception e) {
+                    if (e instanceof InvalidRecordException
+                            && e.getMessage().endsWith("not in use")) {
+                        notFound.incrementAndGet();
+                    } else {
+                        log.error(
+                                "Failed to process, node ID: {} Message: {}",
+                                sourceNodeId,
+                                e.getMessage());
+                    }
+                }
+                // increment here because it's still needed above
+                synchronized (StoreCopy.class) {
+                    if ((sourceNodeId + 1) % 10_000 == 0) {
+                        flusher.flush();
+                        printf(".");
+                    }
+                    if ((sourceNodeId + 1) % 500_000 == 0) {
+                        println(
+                                " %d / %d (%d%%) unused %d removed %d",
+                                sourceNodeId,
+                                highestNodeId,
+                                percent(sourceNodeId, highestNodeId),
+                                notFound.get(),
+                                removed.get());
+                    }
+                }
+            }
 
             final var total = copiedNodes.size();
             time = Math.max(1, (System.currentTimeMillis() - time) / 1000);

@@ -1,131 +1,60 @@
 NOTES:
 
-// clear all indexes and constraints (quickly)
-CALL apoc.schema.assert({},{},true) YIELD label, key RETURN *;
+Store-Util is a utility that Will has forked from an existing Neo4j project that enables copying of a Neo4j database.  As part of this copy, it only grabs valid nodes to include in the copy.
+
+The Utility is built against Neo4j 4.4, so if running against an earlier version, you’ll need to upgrade.
+
+Once you have the Store-Util tar from Will, and have expanded it into a directory on the target machine, navigate to the root directory where you unpacked Store-Util and you’ll need to do the following steps:
+
+Dump the indexes
 
 
+./bin/dump --filename neo4j_indexes.dump
+This runs a show indexes against the neo4j database and dumps all the indexes to a the file neo4j_indexes.dump.  You’ll need this to recreate the indexes after you copy the database since the utility does not copy over indexes.
+
+Stop Neo4j
+
+Neo4j needs to be stopped prior to running the copy.
 
 
+systemctl stop neo4j
+Run the Copy Utility
 
 
+./bin/copy /data/neo4j /data/copy
+This is the step that copies over the data.  It will take some time to run.  In the Neo4j directory, it will copy the contents of the neo4j database into a new folder (in this case copy).
 
-./bin/dump -n -l __appName__ -l __dataModel__ -l lastSyncTransactionId -l lastSyncDatasourceId -l lastSyncDatasource -l createdBy -l updatedBy
-
-
-
-
+Rename neo4j to Backup
 
 
-
-## Notice
-
-Please download a released version, else you must have Apache Maven. (Apache Maven not installed)
-
-## Tool to copy Neo4j Stores
-
-From Neo4j 4.0 please use the [official tool](https://neo4j.com/docs/operations-manual/4.0/tools/copy/) that has the same capabilities.
-
-Uses the BatchInserterImpl to read a store and write the target store keeping the node-ids.
-Copies the manual (legacy) index-files as is, please note it performs no index upgrade!
-
-You will have to recreate any schema indexes too.
-
-Ignores broken nodes and relationships and records them in `target/store-copy.log`
-
-Also useful to skip no longer wanted properties, relationships with a certain type.
-Or of certain labels and even nodes with certain labels.
-
-Good for store compaction and reorganization of relationships and properties as
-it rewrites the store file reclaiming space that is sitting empty.
-
-NOTE: With Neo4j 3.x there are two different store formats, so you have to provide "enterprise" or "community" as first argument of the call!
-
-You can now also decide if you want to compact the node-store, then you have to pass "false" as the parameter for keep-node-ids.
-
-### Usage
-
-Grab the release for your Neo4j version from: https://github.com/jexp/store-utils/releases
-
-Define the $NEO4J_HOME, the $NEO4J_HOME/lib should contain all the jars
-
-```
-unzip store-util-*-release.zip 
-cd store-util-*/
-
-#feel free to change this
-export NEO4J_HOME=/usr/share/neo4j
-
-#IMPORTANT: maven and internet access will be required if NEO4J_HOME is not set properly
-[ ! $(ls $NEO4J_HOME/lib/*) ] && echo "NEO4J_HOME does not contain the libraries, will fall back to maven"
+mv /data/neo4j /data/backups
+Rename copy to neo4j
 
 
-# remove target db
-rm -rf /path/to/fixed.db
+mv /data/copy /data/neo4j
+Uncomment auth_enabled=false
 
-./copy-store.sh community /path/to/source.db /path/to/fixed.db
-```
+In the /etc/neo4j/neo4j.conf file, you’ll need to uncomment the line dbms.security.auth_enabled=false.  The database doesn’t have users yet, so you’ll need this to allow you to connect to the database.
 
-#### NOTICE
+Start Neo4j database
 
-**With Neo4j 3.5.x the location of the `store_lock` file changed to one level above the database directory, so please make sure that your source and target db don't share the same parent directory**
-
-Then you would see an error like this:
-
-```
-Exception in thread "main" org.neo4j.kernel.StoreLockException: Unable to obtain lock on store lock file: 
-/path/to/parent-folder/store_lock. 
-Please ensure no other process is using this database, and that the directory is writable (required even for read-only access)
-```
-
-### Config 
-
-Config will read from `neo4j.properties` file in current directory if it exists, but command line options override.
-
-neo4j.properties
-
-```
-source_db_dir=
-target_db_dir=
-
-keep_node_ids=true
-
-properties_to_ignore=
-labels_to_ignore=
-labels_to_delete=
-rel_types_to_ignore=
-
-store_copy_log_dir=
-bad_entries_log_dir=
-```
-
-### General Usage
-
-    copy-store.sh [enterprise|community] source.db target.db [RELS,TO,SKIP] [props,to,skip] [Labels,To,Skip] [Labels,To,Delete,Nodes] [keep-node-ids:true/false]
+At this point, you’ll need to restart Neo4j
 
 
-The provided script contains these settings for page-cache (note you can configure a different, smaller setting for the source store than the target store).
+systemctl start neo4j
+Create Users
 
-    dbms.pagecache.memory.source=2G
-    dbms.pagecache.memory=2G
+You’ll need to create the two users, one identified in the /opt/brinqa/conf/brinqa.yml file in the neo4j section, generally username starting with b, and root user identifies in the environment variables NEO4J_USERNAME and NEO4J_PASSWORD.
 
-Heap config is in the shell-script, default is: 4 GB Heap
-
-    export MAVEN_OPTS="-Xmx4G -Xms4G -Xmn1G -XX:+UseG1GC"
-
-**Please adapt the settings as needed for your store.**
-
-**Please note that you will need the memory for (source-page-cache + target-page-cache + 1x heap) as it opens 2 databases one for reading and one for writing.**
-
-Change the Neo4j version in pom.xml before running as needed. (Currently 3.4.5)
-
-Optionally changeable from the outside with `-Dneo4j.version=3.4.5` on the `mvn` invocation.
-
-### Internally
+Once you have these users, open a cypher-shell and execute the following for each user:
 
 
+CREATE USER [username] SET PASSWORD '[password]' SET PASSWORD CHANGE NOT REQUIRED SET HOME DATABASE neo4j;
+Load Indexes
 
-Note: maven is called under the hood :
+As the last step, you can run the store-util load script to recreate the indexes.
 
-    mvn compile exec:java -Dexec.mainClass="org.neo4j.tool.StoreCopy" -Penterprise \
-      -Dexec.args="source-dir target-dir [REL,TYPES,TO,IGNORE] [properties,to,ignore] [Labels,To,Ignore] [Labels,To,Delete,Nodes] [keep-node-ids:true/false]"
+
+./bin/load -f neo4j_indexes.dump
+This process currently hangs on constraints against labels with no rows.  Until this gets corrected, you should separate out the constraints from the indexes, and run them separately.  
 
