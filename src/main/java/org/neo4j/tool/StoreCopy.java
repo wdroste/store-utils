@@ -1,10 +1,23 @@
 package org.neo4j.tool;
 
-import org.eclipse.collections.api.map.primitive.LongLongMap;
-import org.eclipse.collections.api.map.primitive.MutableLongLongMap;
-import org.eclipse.collections.impl.map.mutable.primitive.LongLongHashMap;
-import org.neo4j.graphdb.*;
-import org.neo4j.graphdb.factory.*;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.lang.reflect.Field;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+
+import org.neo4j.graphdb.Label;
+import org.neo4j.graphdb.PropertyContainer;
+import org.neo4j.graphdb.RelationshipType;
+import org.neo4j.graphdb.factory.GraphDatabaseFactory;
 import org.neo4j.helpers.Exceptions;
 import org.neo4j.helpers.collection.Iterables;
 import org.neo4j.helpers.collection.MapUtil;
@@ -13,14 +26,17 @@ import org.neo4j.io.fs.FileUtils;
 import org.neo4j.kernel.impl.store.id.IdGeneratorFactory;
 import org.neo4j.kernel.impl.store.id.IdType;
 import org.neo4j.kernel.internal.GraphDatabaseAPI;
-import org.neo4j.unsafe.batchinsert.*;
-import org.neo4j.unsafe.batchinsert.internal.*;
-import org.neo4j.values.storable.Value;
-import org.neo4j.graphdb.factory.*;
+import org.neo4j.unsafe.batchinsert.BatchInserter;
+import org.neo4j.unsafe.batchinsert.BatchInserters;
+import org.neo4j.unsafe.batchinsert.BatchRelationship;
+import org.neo4j.unsafe.batchinsert.internal.BatchInserterImpl;
+import org.neo4j.unsafe.batchinsert.internal.DirectRecordAccess;
+import org.neo4j.unsafe.batchinsert.internal.DirectRecordAccessSet;
+import org.neo4j.unsafe.batchinsert.internal.FileSystemClosingBatchInserter;
 
-import java.io.*;
-import java.lang.reflect.Field;
-import java.util.*;
+import org.eclipse.collections.api.map.primitive.LongLongMap;
+import org.eclipse.collections.api.map.primitive.MutableLongLongMap;
+import org.eclipse.collections.impl.map.mutable.primitive.LongLongHashMap;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptySet;
