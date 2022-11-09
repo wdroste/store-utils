@@ -40,6 +40,7 @@ public class RebuildIndex extends AbstractIndexCommand {
     @Override
     void execute(final Driver driver) throws IOException {
         final List<IndexData> indexes = readIndexes(driver);
+        final var ver = VersionQuery.determineVersion(driver);
         String lastIndexName = file.isFile() ? Files.readString(file.toPath()) : null;
         for (final IndexData index : indexes) {
 
@@ -57,7 +58,7 @@ public class RebuildIndex extends AbstractIndexCommand {
             // save resume file
             Files.writeString(file.toPath(), index.getName());
             dropIndex(driver, index);
-            createIndexWaitForCompletion(driver, index);
+            createIndexWaitForCompletion(driver, ver, index);
         }
         println("Last index saved to %s", this.file);
     }

@@ -79,10 +79,10 @@ public class DumpIndex extends AbstractIndexCommand {
 
     IndexData checkLucene(IndexData index) {
         boolean l = index.getProperties().stream().anyMatch(p -> lucene.contains(p));
-        return l ? modifyIndexProvider(index, "lucene+native-3.0") : index;
+        return l ? modifyIndexProvider(index) : index;
     }
 
-    IndexData modifyIndexProvider(IndexData data, String provider) {
+    IndexData modifyIndexProvider(IndexData data) {
         return new IndexData(
                 data.getId(),
                 data.getName(),
@@ -93,7 +93,7 @@ public class DumpIndex extends AbstractIndexCommand {
                 data.getEntityType(),
                 data.getLabelsOrTypes(),
                 data.getProperties(),
-                provider);
+                "lucene+native-3.0");
     }
 
     @Override

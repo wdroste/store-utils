@@ -25,6 +25,7 @@ import org.neo4j.driver.Value;
 import org.neo4j.driver.exceptions.ServiceUnavailableException;
 import org.neo4j.driver.summary.ResultSummary;
 import org.neo4j.internal.helpers.collection.Iterables;
+import org.neo4j.tool.VersionQuery.Neo4jVersion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import picocli.CommandLine.Option;
@@ -140,18 +141,40 @@ abstract class AbstractIndexCommand implements Runnable {
         return ret;
     }
 
-    void createIndex(final Driver driver, IndexData index) {
-        final var query = indexQuery(index);
+    void createIndex(final Driver driver, Neo4jVersion version, IndexData index) {
+        final var query = indexQuery(version, index);
         println(query);
         try {
             writeTransaction(driver, query);
         } catch (Throwable th) {
             LOG.error("Failed to create index: {}", query, th);
+            throw new RuntimeException(th);
         }
     }
 
-    void createIndexWaitForCompletion(final Driver driver, final IndexData index) {
-        createIndex(driver, index);
+    boolean validIndex(final Driver driver, final IndexData index) {
+        // insure index creation started
+        for (int i = 0; i < 10; i++) {
+            if (indexProgress(driver, index.getName()) >= 0.0) {
+                return true;
+            }
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        return false;
+    }
+
+    void createIndexWaitForCompletion(
+            final Driver driver, final Neo4jVersion version, final IndexData index) {
+        createIndex(driver, version, index);
+
+        if (!validIndex(driver, index)) {
+            println("Failed to create index: %s", index.getName());
+            return;
+        }
 
         // wait for completion
         int pct = 0;
@@ -173,9 +196,20 @@ abstract class AbstractIndexCommand implements Runnable {
         }
     }
 
-    String indexQuery(IndexData indexData) {
-        final String CNT_FMT =
-                "CREATE CONSTRAINT %s IF NOT EXISTS FOR (n:`%s`) REQUIRE n.%s IS UNIQUE;";
+    String createConstraintFormat(Neo4jVersion version) {
+        switch (version) {
+            case v4_2:
+            case v4_3:
+                return "CREATE CONSTRAINT %s IF NOT EXISTS ON (n:%s) ASSERT n.%s IS UNIQUE";
+            case v4_4:
+                return "CREATE CONSTRAINT %s IF NOT EXISTS FOR (n:`%s`) REQUIRE n.%s IS UNIQUE;";
+            default:
+                throw new IllegalArgumentException("Unsupported version: " + version);
+        }
+    }
+
+    String indexQuery(Neo4jVersion version, IndexData indexData) {
+        final String CNT_FMT = createConstraintFormat(version);
         final String IDX_FMT =
                 "CREATE INDEX %s IF NOT EXISTS FOR (n:`%s`) ON (%s) OPTIONS { indexProvider: '%s' };";
 
@@ -202,7 +236,7 @@ abstract class AbstractIndexCommand implements Runnable {
                     tx -> {
                         final var result = tx.run(String.format(FMT, name));
                         final var record = Iterables.firstOrNull(result.list());
-                        return (null == record) ? 0 : record.get(0).asFloat();
+                        return (null == record) ? -1 : record.get(0).asFloat();
                     });
         }
     }
@@ -235,6 +269,7 @@ abstract class AbstractIndexCommand implements Runnable {
     }
 
     static class IndexDataComparator implements Comparator<IndexData> {
+
         private final StringListComparator stringListComparator = new StringListComparator();
 
         @Override

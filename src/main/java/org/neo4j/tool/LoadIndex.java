@@ -6,6 +6,7 @@ import static org.neo4j.tool.Print.println;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.neo4j.driver.Driver;
+import org.neo4j.tool.VersionQuery.Neo4jVersion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import picocli.CommandLine;
@@ -47,6 +48,7 @@ public class LoadIndex extends AbstractIndexCommand {
 
     @Override
     void execute(final Driver driver) {
+        final var ver = VersionQuery.determineVersion(driver);
         final var indexNames = recreate ? Set.<String>of() : readIndexNames(driver);
         final var fileIndexes = readIndexesFromFilename();
         final int total = fileIndexes.size();
@@ -57,7 +59,7 @@ public class LoadIndex extends AbstractIndexCommand {
                 .forEach(
                         indexData -> {
                             println("Progress: %d/%d", count.getAndIncrement(), total);
-                            build(driver, indexData);
+                            build(driver, ver, indexData);
                         });
     }
 
@@ -65,12 +67,11 @@ public class LoadIndex extends AbstractIndexCommand {
         return readIndexes(driver).stream().map(IndexData::getName).collect(toUnmodifiableSet());
     }
 
-    void build(final Driver driver, final IndexData index) {
+    void build(final Driver driver, final Neo4jVersion version, final IndexData index) {
         if (recreate) {
             dropIndex(driver, index);
         }
-
-        createIndexWaitForCompletion(driver, index);
+        createIndexWaitForCompletion(driver, version, index);
     }
 
     @Override
