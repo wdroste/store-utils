@@ -45,6 +45,7 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
+/** Need to validate the data as store copy is running. */
 @Command(
         name = "copy",
         version = "copy 1.0",
@@ -63,6 +64,13 @@ public class StoreCopy implements Runnable {
     // assumption different data directories
     @Parameters(index = "1", description = "Target directory for data files.")
     private File targetDataDirectory;
+
+    @Option(
+            required = true,
+            names = {"-f", "--filename"},
+            description = "Name of the file to load all the indexes.",
+            defaultValue = "index_dump.json")
+    protected String filename;
 
     @Option(
             names = {"-db", "--databaseName"},
@@ -89,11 +97,6 @@ public class StoreCopy implements Runnable {
             names = {"-il", "--ignoreLabels"},
             description = "Labels to ignore.")
     private Set<String> ignoreLabels = new HashSet<>();
-
-    @Option(
-            names = {"-dl", "--deleteLabels"},
-            description = "Nodes with labels to delete (exclude).")
-    private Set<String> deleteLabels = new HashSet<>();
 
     // this example implements Callable, so parsing, error handling and handling user
     // requests for usage help or version help can be done with one line of code.
@@ -191,9 +194,6 @@ public class StoreCopy implements Runnable {
             if (!ignoreLabels.isEmpty()) {
                 println("Ignore label(s): %s", ignoreRelationshipTypes);
             }
-            if (!deleteLabels.isEmpty()) {
-                println("Delete nodes with label(s): %s", ignoreRelationshipTypes);
-            }
 
             // avoid nasty warning
             org.neo4j.internal.unsafe.IllegalAccessLoggerSuppressor.suppress();
@@ -287,8 +287,6 @@ public class StoreCopy implements Runnable {
                 try {
                     if (!sourceDb.nodeExists(sourceNodeId)) {
                         notFound.incrementAndGet();
-                    } else if (labelInSet(sourceDb.getNodeLabels(sourceNodeId), deleteLabels)) {
-                        removed.incrementAndGet();
                     } else {
                         final var srcProps = sourceDb.getNodeProperties(sourceNodeId);
                         final var props = getProperties(srcProps);
