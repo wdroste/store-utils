@@ -11,11 +11,6 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-
-        <!-- plugins -->
-        <assembly-plugin.version>3.4.2</assembly-plugin.version>
-
-        <!-- libs -->
         <neo4j.version>${project.version}</neo4j.version>
     </properties>
 
@@ -103,7 +98,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-assembly-plugin</artifactId>
-                <version>${assembly-plugin.version}</version>
+                <version>3.1.0</version>
                 <configuration>
                     <descriptors>
                         <descriptor>src/main/assembly/assembly.xml</descriptor>
