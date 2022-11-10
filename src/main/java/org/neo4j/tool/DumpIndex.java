@@ -1,6 +1,6 @@
 package org.neo4j.tool;
 
-import static org.neo4j.tool.Print.println;
+import static org.neo4j.tool.util.Print.println;
 
 import java.util.Comparator;
 import java.util.List;
@@ -8,6 +8,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.neo4j.driver.Driver;
+import org.neo4j.tool.dto.IndexData;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -83,17 +84,7 @@ public class DumpIndex extends AbstractIndexCommand {
     }
 
     IndexData modifyIndexProvider(IndexData data) {
-        return new IndexData(
-                data.getId(),
-                data.getName(),
-                data.getState(),
-                data.getPopulationPercent(),
-                data.isUniqueness(),
-                data.getType(),
-                data.getEntityType(),
-                data.getLabelsOrTypes(),
-                data.getProperties(),
-                "lucene+native-3.0");
+        return data.toBuilder().indexProvider("lucene+native-3.0").build();
     }
 
     @Override

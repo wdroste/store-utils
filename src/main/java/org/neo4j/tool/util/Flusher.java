@@ -1,8 +1,7 @@
-package org.neo4j.tool;
+package org.neo4j.tool.util;
 
 import java.lang.reflect.Field;
 import java.util.Map;
-
 import org.neo4j.batchinsert.BatchInserter;
 import org.neo4j.batchinsert.internal.BatchInserterImpl;
 import org.neo4j.batchinsert.internal.FileSystemClosingBatchInserter;
@@ -15,7 +14,7 @@ public interface Flusher {
     static Flusher newFlusher(BatchInserter db) {
         try {
             final Field delegate =
-                FileSystemClosingBatchInserter.class.getDeclaredField("delegate");
+                    FileSystemClosingBatchInserter.class.getDeclaredField("delegate");
             delegate.setAccessible(true);
             db = (BatchInserter) delegate.get(db);
             final Field field = BatchInserterImpl.class.getDeclaredField("recordAccess");
@@ -30,15 +29,12 @@ public interface Flusher {
                     ((Map<?, ?>) cacheField.get(recordAccessSet.getNodeRecords())).clear();
                     ((Map<?, ?>) cacheField.get(recordAccessSet.getRelRecords())).clear();
                     ((Map<?, ?>) cacheField.get(recordAccessSet.getPropertyRecords())).clear();
-                }
-                catch (IllegalAccessException e) {
+                } catch (IllegalAccessException e) {
                     throw new IllegalStateException("Error clearing cache " + cacheField, e);
                 }
             };
-        }
-        catch (IllegalAccessException | NoSuchFieldException e) {
+        } catch (IllegalAccessException | NoSuchFieldException e) {
             throw new IllegalStateException("Error accessing cache field ", e);
         }
     }
-
 }

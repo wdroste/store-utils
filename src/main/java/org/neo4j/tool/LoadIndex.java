@@ -1,12 +1,13 @@
 package org.neo4j.tool;
 
 import static java.util.stream.Collectors.toUnmodifiableSet;
-import static org.neo4j.tool.Print.println;
+import static org.neo4j.tool.util.Print.println;
 
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.neo4j.driver.Driver;
 import org.neo4j.tool.VersionQuery.Neo4jVersion;
+import org.neo4j.tool.dto.IndexData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import picocli.CommandLine;

@@ -1,4 +1,4 @@
-package org.neo4j.tool;
+package org.neo4j.tool.util;
 
 public class Print {
     public static void println(String fmt, Object... args) {

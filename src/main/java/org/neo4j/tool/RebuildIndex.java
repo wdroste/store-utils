@@ -1,6 +1,6 @@
 package org.neo4j.tool;
 
-import static org.neo4j.tool.Print.println;
+import static org.neo4j.tool.util.Print.println;
 
 import java.io.File;
 import java.io.IOException;
@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.util.List;
 import org.apache.commons.lang3.StringUtils;
 import org.neo4j.driver.Driver;
+import org.neo4j.tool.dto.IndexData;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;

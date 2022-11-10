@@ -1,10 +1,16 @@
-package org.neo4j.tool;
+package org.neo4j.tool.util;
+
+import static org.neo4j.configuration.GraphDatabaseSettings.data_directory;
+import static org.neo4j.internal.recordstorage.RecordIdType.NODE;
+import static org.neo4j.internal.recordstorage.RecordIdType.RELATIONSHIP;
+import static org.neo4j.tool.util.Print.println;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Set;
-
+import lombok.Value;
+import lombok.extern.slf4j.Slf4j;
 import org.neo4j.batchinsert.BatchInserter;
 import org.neo4j.batchinsert.BatchInserters;
 import org.neo4j.configuration.Config;
@@ -15,14 +21,6 @@ import org.neo4j.internal.helpers.collection.Iterables;
 import org.neo4j.internal.id.IdGeneratorFactory;
 import org.neo4j.io.layout.DatabaseLayout;
 import org.neo4j.kernel.internal.GraphDatabaseAPI;
-
-import lombok.Value;
-import lombok.extern.slf4j.Slf4j;
-
-import static org.neo4j.configuration.GraphDatabaseSettings.data_directory;
-import static org.neo4j.internal.recordstorage.RecordIdType.NODE;
-import static org.neo4j.internal.recordstorage.RecordIdType.RELATIONSHIP;
-import static org.neo4j.tool.Print.println;
 
 @Slf4j
 public class Neo4jHelper {
@@ -36,16 +34,16 @@ public class Neo4jHelper {
         long relationshipId;
     }
 
-    static BatchInserter newBatchInserter(Config config) {
+    public static BatchInserter newBatchInserter(Config config) {
         try {
             return BatchInserters.inserter(DatabaseLayout.of(config));
-        }
-        catch (IOException e) {
+        } catch (IOException e) {
             throw new IllegalArgumentException(e);
         }
     }
 
-    static HighestInfo determineHighestNodeId(Config sourceConfig, File sourceDataDirectory, String databaseName) {
+    public static HighestInfo determineHighestNodeId(
+            Config sourceConfig, File sourceDataDirectory, String databaseName) {
         final var home = sourceConfig.get(GraphDatabaseSettings.neo4j_home);
         println("Neo4j Home: %s", home);
 
@@ -58,7 +56,7 @@ public class Neo4jHelper {
 
         final var api = (GraphDatabaseAPI) graphDb;
         final var idGenerators =
-            api.getDependencyResolver().resolveDependency(IdGeneratorFactory.class);
+                api.getDependencyResolver().resolveDependency(IdGeneratorFactory.class);
         long highestNodeId = idGenerators.get(NODE).getHighestPossibleIdInUse();
         long highestRelId = idGenerators.get(RELATIONSHIP).getHighestPossibleIdInUse();
         managementService.shutdown();
@@ -66,7 +64,7 @@ public class Neo4jHelper {
         return HighestInfo.of(highestNodeId, highestRelId);
     }
 
-    static Label[] filterLabels(BatchInserter db, Set<String> ignoreLabels, long node) {
+    public static Label[] filterLabels(BatchInserter db, Set<String> ignoreLabels, long node) {
         Collection<Label> labels = Iterables.asCollection(db.getNodeLabels(node));
         if (labels.isEmpty()) {
             return NO_LABELS;
@@ -77,16 +75,15 @@ public class Neo4jHelper {
         return labels.toArray(new Label[0]);
     }
 
-    static int percent(Number part, Number total) {
+    public static int percent(Number part, Number total) {
         return (int) (100 * part.floatValue() / total.floatValue());
     }
 
-    static void shutdown(BatchInserter inserter, String name) {
+    public static void shutdown(BatchInserter inserter, String name) {
         try {
             println("Stopping '%s' database", name);
             inserter.shutdown();
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             log.error("Error while stopping '" + name + "' database.", e);
         }
         println("Stopped '%s' database", name);

@@ -1,7 +1,7 @@
 package org.neo4j.tool;
 
 import static java.util.stream.Collectors.joining;
-import static org.neo4j.tool.Print.println;
+import static org.neo4j.tool.util.Print.println;
 
 import com.google.gson.GsonBuilder;
 import java.io.BufferedReader;
@@ -26,6 +26,7 @@ import org.neo4j.driver.exceptions.ServiceUnavailableException;
 import org.neo4j.driver.summary.ResultSummary;
 import org.neo4j.internal.helpers.collection.Iterables;
 import org.neo4j.tool.VersionQuery.Neo4jVersion;
+import org.neo4j.tool.dto.IndexData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import picocli.CommandLine.Option;
@@ -90,17 +91,18 @@ abstract class AbstractIndexCommand implements Runnable {
     }
 
     static IndexData fromRecord(Record record) {
-        return new IndexData(
-                record.get(0).asLong(),
-                record.get(1).asString(),
-                record.get(2).asString(),
-                record.get(3).asFloat(),
-                "UNIQUE".equals(record.get(4).asString()),
-                record.get(5).asString(),
-                record.get(6).asString(),
-                toList(record.get(7)),
-                toList(record.get(8)),
-                record.get(9).asString());
+        return IndexData.builder()
+                .id(record.get(0).asLong())
+                .name(record.get(1).asString())
+                .state(record.get(2).asString())
+                .populationPercent(record.get(3).asFloat())
+                .uniqueness("UNIQUE".equalsIgnoreCase(record.get(4).asString()))
+                .type(record.get(5).asString())
+                .entityType(record.get(6).asString())
+                .labelsOrTypes(toList(record.get(7)))
+                .properties(toList(record.get(8)))
+                .indexProvider(record.get(9).asString())
+                .build();
     }
 
     static List<String> toList(Value value) {

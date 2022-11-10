@@ -1,4 +1,4 @@
-package org.neo4j.tool;
+package org.neo4j.tool.util;
 
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinWorkerThread;
