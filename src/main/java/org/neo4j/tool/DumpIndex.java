@@ -1,18 +1,16 @@
 package org.neo4j.tool;
 
+import static org.neo4j.tool.util.Print.println;
+
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
-
 import org.neo4j.driver.Driver;
 import org.neo4j.tool.dto.IndexData;
 import org.neo4j.tool.dto.IndexDataComparator;
-
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
-
-import static org.neo4j.tool.util.Print.println;
 
 /**
  * Dumps all the current indexes to a file for loading indexes.
@@ -53,7 +51,8 @@ public class DumpIndex extends AbstractIndexCommand {
                 (lucene == null || lucene.isEmpty()) ? indexes : luceneIndex(indexes);
         final List<IndexData> sortedIndexes =
                 writeIndexes.stream()
-                    .sorted(new IndexDataComparator()).collect(Collectors.toList());
+                        .sorted(new IndexDataComparator())
+                        .collect(Collectors.toList());
         writeIndexes(sortedIndexes);
     }
 

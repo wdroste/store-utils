@@ -1,23 +1,5 @@
 package org.neo4j.tool;
 
-import java.io.Closeable;
-import java.io.File;
-import java.util.HashSet;
-import java.util.Set;
-
-import org.neo4j.batchinsert.BatchInserter;
-import org.neo4j.configuration.Config;
-import org.neo4j.tool.copy.NodeCopyJob;
-import org.neo4j.tool.copy.RelationshipCopyJob;
-import org.neo4j.tool.util.Neo4jHelper;
-import org.neo4j.tool.util.Neo4jHelper.HighestInfo;
-
-import org.eclipse.collections.api.map.primitive.LongLongMap;
-import picocli.CommandLine;
-import picocli.CommandLine.Command;
-import picocli.CommandLine.Option;
-import picocli.CommandLine.Parameters;
-
 import static org.neo4j.configuration.GraphDatabaseSettings.allow_upgrade;
 import static org.neo4j.configuration.GraphDatabaseSettings.data_directory;
 import static org.neo4j.configuration.GraphDatabaseSettings.pagecache_buffered_flush_enabled;
@@ -29,14 +11,28 @@ import static org.neo4j.tool.util.Neo4jHelper.newBatchInserter;
 import static org.neo4j.tool.util.Neo4jHelper.shutdown;
 import static org.neo4j.tool.util.Print.println;
 
-/**
- * Need to validate the data as store copy is running.
- */
+import java.io.Closeable;
+import java.io.File;
+import java.util.HashSet;
+import java.util.Set;
+import org.eclipse.collections.api.map.primitive.LongLongMap;
+import org.neo4j.batchinsert.BatchInserter;
+import org.neo4j.configuration.Config;
+import org.neo4j.tool.copy.NodeCopyJob;
+import org.neo4j.tool.copy.RelationshipCopyJob;
+import org.neo4j.tool.util.Neo4jHelper;
+import org.neo4j.tool.util.Neo4jHelper.HighestInfo;
+import picocli.CommandLine;
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Option;
+import picocli.CommandLine.Parameters;
+
+/** Need to validate the data as store copy is running. */
 @Command(
-    name = "copy",
-    version = "copy 1.0",
-    description =
-        "Copies the source database to the target database, while optimizing size and consistency")
+        name = "copy",
+        version = "copy 1.0",
+        description =
+                "Copies the source database to the target database, while optimizing size and consistency")
 public class StoreCopy implements Runnable {
 
     // assumption different data directories
@@ -48,19 +44,19 @@ public class StoreCopy implements Runnable {
     private File targetDataDirectory;
 
     @Option(
-        names = {"-db", "--databaseName"},
-        description = "Name of the database.",
-        defaultValue = "neo4j")
+            names = {"-db", "--databaseName"},
+            description = "Name of the database.",
+            defaultValue = "neo4j")
     private String databaseName = "neo4j";
 
     @Option(
-        names = {"-cfg", "--neo4jConf"},
-        description = "Source 'neo4j.conf' file location.")
+            names = {"-cfg", "--neo4jConf"},
+            description = "Source 'neo4j.conf' file location.")
     private File sourceConfigurationFile;
 
     @Option(
-        names = {"-d", "--deleteWithLabel"},
-        description = "Nodes to delete with the specified label.")
+            names = {"-d", "--deleteWithLabel"},
+            description = "Nodes to delete with the specified label.")
     private Set<String> deleteNodesByLabel = new HashSet<>();
 
     // this example implements Callable, so parsing, error handling and handling user
@@ -87,20 +83,19 @@ public class StoreCopy implements Runnable {
             // check source directory
             if (!sourceDataDirectory.isDirectory()) {
                 throw new IllegalArgumentException(
-                    "Source data directory does not exist: " + sourceDataDirectory);
+                        "Source data directory does not exist: " + sourceDataDirectory);
             }
             // load configuration from files
             if (!targetDataDirectory.isDirectory() && !targetDataDirectory.mkdirs()) {
                 throw new IllegalArgumentException(
-                    "Unable to create directory for target database: " + targetDataDirectory);
+                        "Unable to create directory for target database: " + targetDataDirectory);
             }
 
             // create a source configuration from main install
             final var sourceCfgBld = Config.newBuilder();
             if (null != sourceConfigurationFile && sourceConfigurationFile.isFile()) {
                 sourceCfgBld.fromFile(sourceConfigurationFile.toPath());
-            }
-            else {
+            } else {
                 sourceCfgBld.set(pagecache_memory, "4G");
                 sourceCfgBld.set(allow_upgrade, false);
                 sourceCfgBld.set(pagecache_direct_io, true);
@@ -112,12 +107,12 @@ public class StoreCopy implements Runnable {
 
             // change the target directory for the data
             Config targetConfig =
-                Config.newBuilder()
-                    .fromConfig(sourceConfig)
-                    .set(read_only_databases, Set.of())
-                    .set(writable_databases, Set.of(databaseName))
-                    .set(data_directory, targetDataDirectory.toPath())
-                    .build();
+                    Config.newBuilder()
+                            .fromConfig(sourceConfig)
+                            .set(read_only_databases, Set.of())
+                            .set(writable_databases, Set.of(databaseName))
+                            .set(data_directory, targetDataDirectory.toPath())
+                            .build();
 
             final var srcPath = sourceConfig.get(data_directory);
 
@@ -131,8 +126,8 @@ public class StoreCopy implements Runnable {
 
             // find the highest node
             this.highestInfo =
-                Neo4jHelper.determineHighestNodeId(
-                    sourceConfig, sourceDataDirectory, databaseName);
+                    Neo4jHelper.determineHighestNodeId(
+                            sourceConfig, sourceDataDirectory, databaseName);
 
             // create inserters
             this.sourceDb = newBatchInserter(sourceConfig);
@@ -143,13 +138,13 @@ public class StoreCopy implements Runnable {
         public void run() {
             // copy nodes from source to target
             final var nodeCopyJob =
-                new NodeCopyJob(
-                    highestInfo.getNodeId(), sourceDb, targetDb, deleteNodesByLabel);
+                    new NodeCopyJob(
+                            highestInfo.getNodeId(), sourceDb, targetDb, deleteNodesByLabel);
             final LongLongMap copiedNodeIds = nodeCopyJob.process();
 
             // copy relationships from source to target
             final var relationshipCopyJob =
-                new RelationshipCopyJob(highestInfo.getRelationshipId(), sourceDb, targetDb);
+                    new RelationshipCopyJob(highestInfo.getRelationshipId(), sourceDb, targetDb);
             relationshipCopyJob.process(copiedNodeIds);
         }
 

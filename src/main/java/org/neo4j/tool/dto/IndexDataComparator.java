@@ -4,9 +4,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/**
- * Sort by constraints first then indexes.
- */
+/** Sort by constraints first then indexes. */
 public class IndexDataComparator implements Comparator<IndexData> {
     private final StringListComparator stringListComparator = new StringListComparator();
 
