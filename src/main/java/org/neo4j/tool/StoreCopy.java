@@ -1,61 +1,38 @@
 package org.neo4j.tool;
 
-import static org.neo4j.configuration.GraphDatabaseSettings.data_directory;
-import static org.neo4j.configuration.GraphDatabaseSettings.pagecache_buffered_flush_enabled;
-import static org.neo4j.configuration.GraphDatabaseSettings.pagecache_direct_io;
-import static org.neo4j.configuration.GraphDatabaseSettings.pagecache_memory;
-import static org.neo4j.internal.recordstorage.RecordIdType.NODE;
-import static org.neo4j.internal.recordstorage.RecordIdType.RELATIONSHIP;
-import static org.neo4j.tool.Print.printf;
-import static org.neo4j.tool.Print.println;
-
 import java.io.Closeable;
 import java.io.File;
-import java.io.IOException;
-import java.lang.reflect.Field;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicLong;
-import org.eclipse.collections.api.map.primitive.LongLongMap;
-import org.eclipse.collections.impl.map.mutable.primitive.LongLongHashMap;
+
 import org.neo4j.batchinsert.BatchInserter;
-import org.neo4j.batchinsert.BatchInserters;
-import org.neo4j.batchinsert.internal.BatchInserterImpl;
-import org.neo4j.batchinsert.internal.BatchRelationship;
-import org.neo4j.batchinsert.internal.FileSystemClosingBatchInserter;
 import org.neo4j.configuration.Config;
-import org.neo4j.configuration.GraphDatabaseSettings;
-import org.neo4j.dbms.api.DatabaseManagementServiceBuilder;
-import org.neo4j.graphdb.Label;
-import org.neo4j.graphdb.RelationshipType;
-import org.neo4j.internal.helpers.collection.Iterables;
-import org.neo4j.internal.id.IdGeneratorFactory;
-import org.neo4j.internal.recordstorage.DirectRecordAccess;
-import org.neo4j.internal.recordstorage.DirectRecordAccessSet;
-import org.neo4j.io.layout.DatabaseLayout;
-import org.neo4j.kernel.impl.store.InvalidRecordException;
-import org.neo4j.kernel.internal.GraphDatabaseAPI;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.neo4j.tool.Neo4jHelper.HighestInfo;
+
+import org.eclipse.collections.api.map.primitive.LongLongMap;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
-/** Need to validate the data as store copy is running. */
+import static org.neo4j.configuration.GraphDatabaseSettings.data_directory;
+import static org.neo4j.configuration.GraphDatabaseSettings.pagecache_buffered_flush_enabled;
+import static org.neo4j.configuration.GraphDatabaseSettings.pagecache_direct_io;
+import static org.neo4j.configuration.GraphDatabaseSettings.pagecache_memory;
+import static org.neo4j.tool.Neo4jHelper.newBatchInserter;
+import static org.neo4j.tool.Neo4jHelper.shutdown;
+import static org.neo4j.tool.Print.println;
+
+/**
+ * Need to validate the data as store copy is running.
+ */
 @Command(
-        name = "copy",
-        version = "copy 1.0",
-        description =
-                "Copies the source database to the target database, while optimizing size and consistency")
+    name = "copy",
+    version = "copy 1.0",
+    description =
+        "Copies the source database to the target database, while optimizing size and consistency")
 public class StoreCopy implements Runnable {
 
-    private static final Logger log = LoggerFactory.getLogger(StoreCopy.class);
-
-    private static final Label[] NO_LABELS = new Label[0];
 
     // assumption different data directories
     @Parameters(index = "0", description = "Source directory for the data files.")
@@ -66,36 +43,26 @@ public class StoreCopy implements Runnable {
     private File targetDataDirectory;
 
     @Option(
-            required = true,
-            names = {"-f", "--filename"},
-            description = "Name of the file to load all the indexes.",
-            defaultValue = "index_dump.json")
+        required = true,
+        names = {"-f", "--filename"},
+        description = "Name of the file to load all the indexes.",
+        defaultValue = "index_dump.json")
     protected String filename;
 
     @Option(
-            names = {"-db", "--databaseName"},
-            description = "Name of the database.",
-            defaultValue = "neo4j")
+        names = {"-db", "--databaseName"},
+        description = "Name of the database.",
+        defaultValue = "neo4j")
     private String databaseName = "neo4j";
 
     @Option(
-            names = {"-cfg", "--neo4jConf"},
-            description = "Source 'neo4j.conf' file location.")
+        names = {"-cfg", "--neo4jConf"},
+        description = "Source 'neo4j.conf' file location.")
     private File sourceConfigurationFile;
 
     @Option(
-            names = {"-irt", "--ignoreRelationshipTypes"},
-            description = "Relationship types to ignore.")
-    private Set<String> ignoreRelationshipTypes = new HashSet<>();
-
-    @Option(
-            names = {"-ip", "--ignoreProperties"},
-            description = "Properties to ignore.")
-    private Set<String> ignoreProperties = new HashSet<>();
-
-    @Option(
-            names = {"-il", "--ignoreLabels"},
-            description = "Labels to ignore.")
+        names = {"-il", "--ignoreLabels"},
+        description = "Labels to ignore.")
     private Set<String> ignoreLabels = new HashSet<>();
 
     // this example implements Callable, so parsing, error handling and handling user
@@ -107,99 +74,61 @@ public class StoreCopy implements Runnable {
 
     @Override
     public void run() {
-        try (final var job = new CopyStoreJob()) {
+        try (final var job = new StoreCopyJob()) {
             job.run();
         }
     }
 
-    interface Flusher {
+    class StoreCopyJob implements Runnable, Closeable {
 
-        void flush();
-    }
-
-    private Flusher newFlusher(BatchInserter db) {
-        try {
-            final Field delegate =
-                    FileSystemClosingBatchInserter.class.getDeclaredField("delegate");
-            delegate.setAccessible(true);
-            db = (BatchInserter) delegate.get(db);
-            final Field field = BatchInserterImpl.class.getDeclaredField("recordAccess");
-            field.setAccessible(true);
-
-            final DirectRecordAccessSet recordAccessSet = (DirectRecordAccessSet) field.get(db);
-            final Field cacheField = DirectRecordAccess.class.getDeclaredField("batch");
-            cacheField.setAccessible(true);
-
-            return () -> {
-                try {
-                    ((Map<?, ?>) cacheField.get(recordAccessSet.getNodeRecords())).clear();
-                    ((Map<?, ?>) cacheField.get(recordAccessSet.getRelRecords())).clear();
-                    ((Map<?, ?>) cacheField.get(recordAccessSet.getPropertyRecords())).clear();
-                } catch (IllegalAccessException e) {
-                    throw new IllegalStateException("Error clearing cache " + cacheField, e);
-                }
-            };
-        } catch (IllegalAccessException | NoSuchFieldException e) {
-            throw new IllegalStateException("Error accessing cache field ", e);
-        }
-    }
-
-    class CopyStoreJob implements Runnable, Closeable {
-
-        private final Config sourceConfig;
         private final HighestInfo highestInfo;
         private final BatchInserter sourceDb;
         private final BatchInserter targetDb;
 
-        public CopyStoreJob() {
+        public StoreCopyJob() {
             // check source directory
             if (!sourceDataDirectory.isDirectory()) {
                 throw new IllegalArgumentException(
-                        "Source data directory does not exist: " + sourceDataDirectory);
+                    "Source data directory does not exist: " + sourceDataDirectory);
             }
             // load configuration from files
             if (!targetDataDirectory.isDirectory() && !targetDataDirectory.mkdirs()) {
                 throw new IllegalArgumentException(
-                        "Unable to create directory for target database: " + targetDataDirectory);
+                    "Unable to create directory for target database: " + targetDataDirectory);
             }
 
             // create a source configuration from main install
             final var sourceCfgBld = Config.newBuilder();
             if (null != sourceConfigurationFile && sourceConfigurationFile.isFile()) {
                 sourceCfgBld.fromFile(sourceConfigurationFile.toPath());
-            } else {
+            }
+            else {
                 sourceCfgBld.set(pagecache_memory, "4G");
                 sourceCfgBld.set(pagecache_direct_io, true);
                 sourceCfgBld.set(pagecache_buffered_flush_enabled, true);
             }
             sourceCfgBld.set(data_directory, sourceDataDirectory.toPath());
-            sourceConfig = sourceCfgBld.build();
+            final var sourceConfig = sourceCfgBld.build();
 
             // change the target directory for the data
             Config targetConfig =
-                    Config.newBuilder()
-                            .fromConfig(this.sourceConfig)
-                            .set(data_directory, targetDataDirectory.toPath())
-                            .build();
+                Config.newBuilder()
+                    .fromConfig(sourceConfig)
+                    .set(data_directory, targetDataDirectory.toPath())
+                    .build();
 
-            final var srcPath = this.sourceConfig.get(data_directory);
+            final var srcPath = sourceConfig.get(data_directory);
 
             println("Copying from %s to %s", srcPath, targetDataDirectory);
-            if (!ignoreRelationshipTypes.isEmpty()) {
-                println("Ignore relationship types: %s", ignoreRelationshipTypes);
-            }
-            if (!ignoreProperties.isEmpty()) {
-                println("Ignore properties: %s", ignoreRelationshipTypes);
-            }
             if (!ignoreLabels.isEmpty()) {
-                println("Ignore label(s): %s", ignoreRelationshipTypes);
+                println("Ignore label(s): %s", ignoreLabels);
             }
 
             // avoid nasty warning
             org.neo4j.internal.unsafe.IllegalAccessLoggerSuppressor.suppress();
 
             // find the highest node
-            this.highestInfo = getHighestNodeId();
+            this.highestInfo = Neo4jHelper.determineHighestNodeId(sourceConfig, sourceDataDirectory, databaseName);
 
             // create inserters
             this.sourceDb = newBatchInserter(sourceConfig);
@@ -209,10 +138,12 @@ public class StoreCopy implements Runnable {
         @Override
         public void run() {
             // copy nodes from source to target
-            final LongLongMap copiedNodeIds = copyNodes();
+            final var nodeCopyJob = new NodeCopyJob(highestInfo.getNodeId(), sourceDb, targetDb, ignoreLabels);
+            final LongLongMap copiedNodeIds = nodeCopyJob.process();
 
             // copy relationships from source to target
-            copyRelationships(copiedNodeIds);
+            final var relationshipCopyJob = new RelationshipCopyJob(highestInfo.getRelationshipId(), sourceDb, targetDb);
+            relationshipCopyJob.process(copiedNodeIds);
         }
 
         @Override
@@ -221,228 +152,5 @@ public class StoreCopy implements Runnable {
             shutdown(targetDb, "target");
             shutdown(sourceDb, "source");
         }
-
-        void shutdown(BatchInserter inserter, String name) {
-            try {
-                println("Stopping '%s' database", name);
-                inserter.shutdown();
-            } catch (Exception e) {
-                log.error("Error while stopping '" + name + "' database.", e);
-            }
-            println("Stopped '%s' database", name);
-        }
-
-        BatchInserter newBatchInserter(Config config) {
-            try {
-                return BatchInserters.inserter(DatabaseLayout.of(config));
-            } catch (IOException e) {
-                throw new IllegalArgumentException(e);
-            }
-        }
-
-        class HighestInfo {
-
-            final long nodeId;
-            final long relationshipId;
-
-            HighestInfo(long nodeId, long relationshipId) {
-                this.nodeId = nodeId;
-                this.relationshipId = relationshipId;
-            }
-        }
-
-        private HighestInfo getHighestNodeId() {
-            final var home = sourceConfig.get(GraphDatabaseSettings.neo4j_home);
-            println("Neo4j Home: %s", home);
-
-            final var managementServiceBld = new DatabaseManagementServiceBuilder(home);
-            managementServiceBld.setConfig(data_directory, sourceDataDirectory.toPath());
-            println("Source Data Directory: %s", sourceDataDirectory);
-
-            final var managementService = managementServiceBld.build();
-            final var graphDb = managementService.database(databaseName);
-
-            final var api = (GraphDatabaseAPI) graphDb;
-            final var idGenerators =
-                    api.getDependencyResolver().resolveDependency(IdGeneratorFactory.class);
-            long highestNodeId = idGenerators.get(NODE).getHighestPossibleIdInUse();
-            long highestRelId = idGenerators.get(RELATIONSHIP).getHighestPossibleIdInUse();
-            managementService.shutdown();
-
-            return new HighestInfo(highestNodeId, highestRelId);
-        }
-
-        private LongLongMap copyNodes() {
-            final var copiedNodes = new LongLongHashMap(10_000_000);
-
-            long time = System.currentTimeMillis();
-            final var notFound = new AtomicLong();
-            final var removed = new AtomicLong();
-
-            final var highestNodeId = this.highestInfo.nodeId;
-            final Flusher flusher = newFlusher(sourceDb);
-
-            long bound = highestNodeId + 1;
-            for (long sourceNodeId = 0; sourceNodeId < bound; sourceNodeId++) {
-                try {
-                    if (!sourceDb.nodeExists(sourceNodeId)) {
-                        notFound.incrementAndGet();
-                    } else {
-                        final var srcProps = sourceDb.getNodeProperties(sourceNodeId);
-                        final var props = getProperties(srcProps);
-                        final var labels = labelsArray(sourceDb, sourceNodeId);
-
-                        long targetNodeId = targetDb.createNode(props, labels);
-                        synchronized (StoreCopy.class) {
-                            copiedNodes.put(sourceNodeId, targetNodeId);
-                        }
-                    }
-                } catch (Exception e) {
-                    if (e instanceof InvalidRecordException
-                            && e.getMessage().endsWith("not in use")) {
-                        notFound.incrementAndGet();
-                    } else {
-                        log.error(
-                                "Failed to process, node ID: {} Message: {}",
-                                sourceNodeId,
-                                e.getMessage());
-                    }
-                }
-                // increment here because it's still needed above
-                synchronized (StoreCopy.class) {
-                    if ((sourceNodeId + 1) % 10_000 == 0) {
-                        flusher.flush();
-                        printf(".");
-                    }
-                    if ((sourceNodeId + 1) % 500_000 == 0) {
-                        println(
-                                " %d / %d (%d%%) unused %d removed %d",
-                                sourceNodeId,
-                                highestNodeId,
-                                percent(sourceNodeId, highestNodeId),
-                                notFound.get(),
-                                removed.get());
-                    }
-                }
-            }
-
-            final var total = copiedNodes.size();
-            time = Math.max(1, (System.currentTimeMillis() - time) / 1000);
-            println(
-                    "%nCopying to highest sourceNodeId %d took %d seconds (%d rec/s). Unused Records %d (%d%%). Removed Records %d (%d%%). Total Copied: %d",
-                    total,
-                    time,
-                    total / time,
-                    notFound.get(),
-                    percent(notFound.get(), total),
-                    removed.get(),
-                    percent(removed.get(), total),
-                    copiedNodes.size());
-            return copiedNodes;
-        }
-
-        void copyRelationships(LongLongMap copiedNodeIds) {
-
-            long time = System.currentTimeMillis();
-            long relId = 0;
-            long notFound = 0;
-            long removed = 0;
-
-            final var highestRelId = this.highestInfo.relationshipId;
-            final Flusher flusher = newFlusher(sourceDb);
-            while (relId <= highestRelId) {
-                try {
-                    final var rel = sourceDb.getRelationshipById(relId);
-                    if (ignoreRelationshipTypes.contains(rel.getType().name())) {
-                        removed++;
-                    } else if (!createRelationship(rel, copiedNodeIds)) {
-                        removed++;
-                    }
-                } catch (Exception e) {
-                    if (e instanceof InvalidRecordException
-                            && e.getMessage().endsWith("not in use")) {
-                        notFound++;
-                    } else {
-                        log.error(
-                                "Failed to process, relationship ID: {} Message: {}",
-                                relId,
-                                e.getMessage());
-                    }
-                }
-                // increment here for counts, its still needed above
-                if (++relId % 10000 == 0) {
-                    flusher.flush();
-                    printf(".");
-                }
-                if (relId % 500000 == 0) {
-                    printf(
-                            " %d / %d (%d%%) unused %d removed %d%n",
-                            relId, highestRelId, percent(relId, highestRelId), notFound, removed);
-                }
-            }
-            time = Math.max(1, (System.currentTimeMillis() - time) / 1000);
-            final var msg =
-                    "%nCopying of %d relationship records took %d seconds (%d rec/s). Unused Records %d (%d%%) Removed Records %d (%d%%)%n";
-            printf(
-                    msg,
-                    relId,
-                    time,
-                    relId / time,
-                    notFound,
-                    percent(notFound, relId),
-                    removed,
-                    percent(removed, relId));
-        }
-
-        boolean createRelationship(BatchRelationship rel, LongLongMap copiedNodeIds) {
-            try {
-                final long startNodeId = copiedNodeIds.get(rel.getStartNode());
-                final long endNodeId = copiedNodeIds.get(rel.getEndNode());
-                final RelationshipType type = rel.getType();
-                final var props = getProperties(sourceDb.getRelationshipProperties(rel.getId()));
-                targetDb.createRelationship(startNodeId, endNodeId, type, props);
-                return true;
-            } catch (Exception e) {
-                log.error("Failed to create relationship.", e);
-            }
-            return false;
-        }
-    }
-
-    private static boolean labelInSet(Iterable<Label> nodeLabels, Set<String> labelSet) {
-        if (labelSet == null || labelSet.isEmpty()) {
-            return false;
-        }
-        for (final Label nodeLabel : nodeLabels) {
-            if (labelSet.contains(nodeLabel.name())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private Label[] labelsArray(BatchInserter db, long node) {
-        Collection<Label> labels = Iterables.asCollection(db.getNodeLabels(node));
-        if (labels.isEmpty()) {
-            return NO_LABELS;
-        }
-        if (!this.ignoreLabels.isEmpty()) {
-            labels.removeIf(label -> this.ignoreLabels.contains(label.name()));
-        }
-        return labels.toArray(new Label[0]);
-    }
-
-    private Map<String, Object> getProperties(Map<String, Object> pc) {
-        if (pc.isEmpty()) {
-            return Collections.emptyMap();
-        }
-        if (!this.ignoreProperties.isEmpty()) {
-            pc.keySet().removeAll(this.ignoreProperties);
-        }
-        return pc;
-    }
-
-    private int percent(Number part, Number total) {
-        return (int) (100 * part.floatValue() / total.floatValue());
     }
 }

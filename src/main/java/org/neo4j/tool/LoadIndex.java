@@ -54,11 +54,12 @@ public class LoadIndex extends AbstractIndexCommand {
         final int total = fileIndexes.size();
         final var count = new AtomicInteger();
         fileIndexes.stream()
+                .peek(ignore -> count.incrementAndGet())
                 .filter(indexData -> !indexData.getLabelsOrTypes().isEmpty())
                 .filter(indexData -> !indexNames.contains(indexData.getName()))
                 .forEach(
                         indexData -> {
-                            println("Progress: %d/%d", count.getAndIncrement(), total);
+                            println("Progress: %d/%d", count.get(), total);
                             build(driver, ver, indexData);
                         });
     }
