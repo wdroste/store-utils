@@ -48,13 +48,6 @@ public class StoreCopy implements Runnable {
     private File targetDataDirectory;
 
     @Option(
-        required = true,
-        names = {"-f", "--filename"},
-        description = "Name of the file to load all the indexes.",
-        defaultValue = "index_dump.json")
-    protected String filename;
-
-    @Option(
         names = {"-db", "--databaseName"},
         description = "Name of the database.",
         defaultValue = "neo4j")

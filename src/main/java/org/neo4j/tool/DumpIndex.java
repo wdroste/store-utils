@@ -1,17 +1,18 @@
 package org.neo4j.tool;
 
-import static org.neo4j.tool.util.Print.println;
-
-import java.util.Comparator;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+
 import org.neo4j.driver.Driver;
 import org.neo4j.tool.dto.IndexData;
+import org.neo4j.tool.dto.IndexDataComparator;
+
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
+
+import static org.neo4j.tool.util.Print.println;
 
 /**
  * Dumps all the current indexes to a file for loading indexes.
@@ -51,26 +52,9 @@ public class DumpIndex extends AbstractIndexCommand {
         final List<IndexData> writeIndexes =
                 (lucene == null || lucene.isEmpty()) ? indexes : luceneIndex(indexes);
         final List<IndexData> sortedIndexes =
-                writeIndexes.stream().sorted(labelSort()).collect(Collectors.toList());
+                writeIndexes.stream()
+                    .sorted(new IndexDataComparator()).collect(Collectors.toList());
         writeIndexes(sortedIndexes);
-    }
-
-    Comparator<IndexData> labelSort() {
-        return (o1, o2) -> {
-            String l1 = nullOrEmpty(o1.getLabelsOrTypes());
-            String l2 = nullOrEmpty(o2.getLabelsOrTypes());
-            int cmp = l1.compareTo(l2);
-            if (0 != cmp) {
-                return cmp;
-            }
-            String p1 = nullOrEmpty(o1.getProperties());
-            String p2 = nullOrEmpty(o2.getProperties());
-            return Objects.compare(p1, p2, String::compareTo);
-        };
-    }
-
-    String nullOrEmpty(List<String> list) {
-        return list.isEmpty() ? "" : list.stream().sorted().findFirst().get();
     }
 
     /** Substitute the index for lucene */
