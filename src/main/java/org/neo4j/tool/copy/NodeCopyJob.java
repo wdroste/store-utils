@@ -2,18 +2,21 @@ package org.neo4j.tool.copy;
 
 import static java.lang.System.currentTimeMillis;
 import static org.neo4j.tool.util.Flusher.newFlusher;
-import static org.neo4j.tool.util.Neo4jHelper.filterLabels;
 import static org.neo4j.tool.util.Neo4jHelper.percent;
 import static org.neo4j.tool.util.Print.printf;
 import static org.neo4j.tool.util.Print.println;
 
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.collections.api.map.primitive.LongLongMap;
 import org.eclipse.collections.impl.map.mutable.primitive.LongLongHashMap;
 import org.neo4j.batchinsert.BatchInserter;
+import org.neo4j.graphdb.Label;
+import org.neo4j.internal.helpers.collection.Iterables;
 import org.neo4j.kernel.impl.store.InvalidRecordException;
 import org.neo4j.tool.util.Flusher;
 
@@ -24,13 +27,22 @@ public class NodeCopyJob {
     private final long highestNodeId;
     private final BatchInserter sourceDb;
     private final BatchInserter targetDb;
-    private final Set<String> deleteNodesWithLabels;
+    private final String acceptanceScript;
 
     public LongLongMap process() {
-        return new NodeCopyProcessor().process();
+        try (PredicateBuilder builder = new PredicateBuilder()) {
+            final var predicate = builder.newInstance(acceptanceScript);
+            return new NodeCopyProcessor(predicate).process();
+        } catch (Exception ioe) {
+            throw new IllegalStateException(ioe);
+        }
     }
 
+    @RequiredArgsConstructor
     class NodeCopyProcessor {
+
+        // acceptance criteria script
+        private final Predicate<NodeObject> acceptance;
 
         // stats
         private final long bound = highestNodeId + 1;
@@ -47,11 +59,10 @@ public class NodeCopyJob {
                     if (!sourceDb.nodeExists(sourceNodeId)) {
                         notFound.incrementAndGet();
                     } else {
-                        final var srcProps = sourceDb.getNodeProperties(sourceNodeId);
-                        final var labels =
-                                filterLabels(sourceDb, deleteNodesWithLabels, sourceNodeId);
-                        final var targetNodeId = targetDb.createNode(srcProps, labels);
-                        copiedNodes.put(sourceNodeId, targetNodeId);
+                        final long targetNodeId = copyNode(sourceNodeId);
+                        if (targetNodeId > 0) {
+                            copiedNodes.put(sourceNodeId, targetNodeId);
+                        }
                     }
                 } catch (Exception e) {
                     handleFailure(e, sourceNodeId);
@@ -70,12 +81,28 @@ public class NodeCopyJob {
             return copiedNodes;
         }
 
+        long copyNode(long sourceNodeId) {
+            final var properties = sourceDb.getNodeProperties(sourceNodeId);
+            final var labels = Iterables.asList(sourceDb.getNodeLabels(sourceNodeId));
+
+            final var labelNames = labels.stream().map(Label::name).collect(Collectors.toList());
+            final var node = new NodeObject(labelNames, properties);
+            if (acceptance.test(node)) {
+                // accepted create the node
+                final var nodeLabels = labels.toArray(new Label[] {});
+                return targetDb.createNode(properties, nodeLabels);
+            }
+            // failed acceptance criteria filter
+            removed.incrementAndGet();
+            return -1L;
+        }
+
         private void handleFailure(Exception e, long sourceNodeId) {
             if (e instanceof InvalidRecordException && e.getMessage().endsWith("not in use")) {
                 notFound.incrementAndGet();
             } else {
-                log.error(
-                        "Failed to process, node ID: {} Message: {}", sourceNodeId, e.getMessage());
+                final var FMT = "Failed to process, node ID: {} Message: {}";
+                log.error(FMT, sourceNodeId, e.getMessage());
             }
         }
 
@@ -94,16 +121,21 @@ public class NodeCopyJob {
         private void printFinalStats() {
             final var total = copiedNodes.size();
             final var time = Math.max(1, (currentTimeMillis() - start) / 1000);
+            final var fmt =
+                    new String[] {
+                        "%nCopying to highest source node %d took %d seconds (%d rec/s).",
+                        "Unused Records: %d",
+                        "Removed Records: %d",
+                        "Total Copied: %d"
+                    };
             println(
-                    "%nCopying to highest source node %d took %d seconds (%d rec/s). Unused Records %d (%d%%). Removed Records %d (%d%%). Total Copied: %d",
-                    total,
+                    String.join("%n", fmt),
+                    highestNodeId,
                     time,
-                    total / time,
+                    highestNodeId / time,
                     notFound.get(),
-                    percent(notFound.get(), total),
                     removed.get(),
-                    percent(removed.get(), total),
-                    copiedNodes.size());
+                    total);
         }
     }
 }

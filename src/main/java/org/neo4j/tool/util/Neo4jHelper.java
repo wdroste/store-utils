@@ -7,7 +7,7 @@ import static org.neo4j.tool.util.Print.println;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Collection;
+import java.util.List;
 import java.util.Set;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
@@ -65,7 +65,7 @@ public class Neo4jHelper {
     }
 
     public static Label[] filterLabels(BatchInserter db, Set<String> ignoreLabels, long node) {
-        Collection<Label> labels = Iterables.asCollection(db.getNodeLabels(node));
+        List<Label> labels = Iterables.asList(db.getNodeLabels(node));
         if (labels.isEmpty()) {
             return NO_LABELS;
         }
