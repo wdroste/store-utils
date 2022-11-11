@@ -7,8 +7,10 @@ import static org.neo4j.tool.util.Print.printf;
 import static org.neo4j.tool.util.Print.println;
 
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.LongConsumer;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.LongStream;
 import lombok.AllArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -50,34 +52,36 @@ public class NodeCopyJob {
         private final AtomicLong notFound = new AtomicLong();
         private final AtomicLong removed = new AtomicLong();
         private final Flusher flusher = newFlusher(sourceDb);
-        private final LongLongHashMap copiedNodes = new LongLongHashMap(10_000_000);
 
         public LongLongMap process() {
-
-            for (long sourceNodeId = 0; sourceNodeId < bound; sourceNodeId++) {
-                try {
-                    if (!sourceDb.nodeExists(sourceNodeId)) {
-                        notFound.incrementAndGet();
-                    } else {
-                        final long targetNodeId = copyNode(sourceNodeId);
-                        if (targetNodeId > 0) {
-                            copiedNodes.put(sourceNodeId, targetNodeId);
+            final var copiedNodes = new LongLongHashMap(10_000_000);
+            final LongConsumer consumer =
+                    sourceNodeId -> {
+                        try {
+                            if (!sourceDb.nodeExists(sourceNodeId)) {
+                                notFound.incrementAndGet();
+                            } else {
+                                final long targetNodeId = copyNode(sourceNodeId);
+                                if (targetNodeId > 0) {
+                                    synchronized (this) {
+                                        copiedNodes.put(sourceNodeId, targetNodeId);
+                                    }
+                                }
+                            }
+                        } catch (Exception e) {
+                            handleFailure(e, sourceNodeId);
                         }
-                    }
-                } catch (Exception e) {
-                    handleFailure(e, sourceNodeId);
-                }
-                // count is node index + 1 as its zero based
-                long count = sourceNodeId + 1;
-                printStats(count);
+                        // count is node index + 1 as its zero based
+                        long count = sourceNodeId + 1;
+                        printStats(count);
 
-                // flush content for memory usage
-                if (count % 20_000 == 0) {
-                    flusher.flush();
-                }
-            }
-            printFinalStats();
-
+                        // flush content for memory usage
+                        if (count % 20_000 == 0) {
+                            flusher.flush();
+                        }
+                    };
+            LongStream.range(0, bound).parallel().forEach(consumer);
+            printFinalStats(copiedNodes.size());
             return copiedNodes;
         }
 
@@ -103,6 +107,7 @@ public class NodeCopyJob {
             } else {
                 final var FMT = "Failed to process, node ID: {} Message: {}";
                 log.error(FMT, sourceNodeId, e.getMessage());
+                removed.incrementAndGet();
             }
         }
 
@@ -118,8 +123,7 @@ public class NodeCopyJob {
             }
         }
 
-        private void printFinalStats() {
-            final var total = copiedNodes.size();
+        private void printFinalStats(long total) {
             final var time = Math.max(1, (currentTimeMillis() - start) / 1000);
             final var fmt =
                     new String[] {
