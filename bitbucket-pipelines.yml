@@ -1,0 +1,27 @@
+image: maven:3.8.3-jdk-11
+
+pipelines:
+  default:
+    - step:
+        name: Build and Test
+        caches:
+          - maven
+        script:
+          - mvn -B verify --file pom.xml
+        artifacts:
+          - "target/distributions/store-utils*"
+    - step:
+        name: Upload
+        script:
+          - pipe: atlassian/bitbucket-upload-file:0.3.3
+            variables:
+              BITBUCKET_USERNAME:  $BITBUCKET_USERNAME
+              BITBUCKET_APP_PASSWORD: $BITBUCKET_APP_PASSWORD
+              FILENAME: "target/distributions/store-utils*"
+    - step:
+        name: Security Scan
+        script:
+          # Run a security scan for sensitive data.
+          # See more security tools at https://bitbucket.org/product/features/pipelines/integrations?&category=security
+          - pipe: atlassian/git-secrets-scan:0.5.1
+
