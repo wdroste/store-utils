@@ -1,7 +1,6 @@
 package org.neo4j.tool.copy;
 
 import groovy.lang.GroovyClassLoader;
-
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.util.function.Predicate;
@@ -41,8 +40,7 @@ public class PredicateBuilder implements AutoCloseable {
     public void close() {
         try {
             this.gcl.close();
-        }
-        catch (IOException e) {
+        } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
