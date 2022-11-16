@@ -17,8 +17,7 @@ pipelines:
           script:
             - mvn -B verify --file pom.xml
           artifacts:
-            - target/store-utils*.zip
-            - target/store-utils*.tar
+            - target/distributions/store-utils*
       - step:
           name: Security Scan
           script:
