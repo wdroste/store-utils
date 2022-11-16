@@ -1,6 +1,8 @@
 package org.neo4j.tool.copy;
 
 import groovy.lang.GroovyClassLoader;
+
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.util.function.Predicate;
 import org.apache.commons.lang3.StringUtils;
@@ -25,6 +27,7 @@ public class PredicateBuilder implements AutoCloseable {
         final var clazzText = String.format(scriptFmt, script);
         final var clazz = gcl.parseClass(clazzText);
         try {
+            //noinspection unchecked
             return (Predicate<NodeObject>) clazz.getConstructor().newInstance();
         } catch (NoSuchMethodException
                 | InvocationTargetException
@@ -35,7 +38,12 @@ public class PredicateBuilder implements AutoCloseable {
     }
 
     @Override
-    public void close() throws Exception {
-        this.gcl.close();
+    public void close() {
+        try {
+            this.gcl.close();
+        }
+        catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

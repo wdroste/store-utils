@@ -209,17 +209,9 @@ abstract class AbstractIndexCommand implements Runnable {
         }
     }
 
-    String indexOrConstraintQuery(Neo4jVersion version, IndexData indexData) {
+    String indexQuery(Neo4jVersion version, IndexData indexData) {
         final String name = indexData.getName();
         final String label = Iterables.firstOrNull(indexData.getLabelsOrTypes());
-
-        // create a constraint
-        if (indexData.isUniqueness()) {
-            // create constraint
-            final String format = createConstraintFormat(version);
-            final String firstProp = Iterables.firstOrNull(indexData.getProperties());
-            return String.format(format, name, label, firstProp);
-        }
 
         // create an index
         final String IDX_FMT =
@@ -230,6 +222,22 @@ abstract class AbstractIndexCommand implements Runnable {
         final String properties =
                 indexData.getProperties().stream().map(propFx).collect(joining(","));
         return String.format(IDX_FMT, name, label, properties, indexProvider);
+    }
+
+    String constraintQuery(Neo4jVersion version, IndexData indexData) {
+        final String name = indexData.getName();
+        final String label = Iterables.firstOrNull(indexData.getLabelsOrTypes());
+
+        // create constraint
+        final String format = createConstraintFormat(version);
+        final String firstProp = Iterables.firstOrNull(indexData.getProperties());
+        return String.format(format, name, label, firstProp);
+    }
+
+    String indexOrConstraintQuery(Neo4jVersion version, IndexData indexData) {
+        return indexData.isUniqueness()
+                ? constraintQuery(version, indexData)
+                : indexQuery(version, indexData);
     }
 
     float indexProgress(final Driver driver, String name) {
