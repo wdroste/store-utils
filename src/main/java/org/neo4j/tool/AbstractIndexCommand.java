@@ -259,7 +259,7 @@ abstract class AbstractIndexCommand implements Runnable {
     }
 
     IndexStatus toIndexState(Transaction tx, String name) {
-        final String FMT = "show indexes yield populationPercent,name WHERE name = \"%s\"";
+        final String FMT = "show indexes yield populationPercent,state,name WHERE name = \"%s\"";
         final var result = tx.run(String.format(FMT, name));
         final var record = Iterables.firstOrNull(result.list());
         if (null == record) {
