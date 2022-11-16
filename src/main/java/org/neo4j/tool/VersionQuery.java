@@ -33,15 +33,12 @@ public class VersionQuery {
     }
 
     static Neo4jVersion toVersion(String ver) {
-        if (ver.startsWith("4.4")) {
+        if (ver.startsWith("4.4"))
             return Neo4jVersion.v4_4;
-        }
-        if (ver.startsWith("4.3")) {
+        if (ver.startsWith("4.3"))
             return Neo4jVersion.v4_3;
-        }
-        if (ver.startsWith("4.2")) {
+        if (ver.startsWith("4.2"))
             return Neo4jVersion.v4_2;
-        }
         throw new IllegalArgumentException("Unknown version " + ver);
     }
 }
