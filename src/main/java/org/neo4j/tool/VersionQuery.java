@@ -3,9 +3,7 @@ package org.neo4j.tool;
 import org.neo4j.driver.Driver;
 import org.neo4j.driver.Session;
 
-/**
- * Determine the version of Neo4j
- */
+/** Determine the version of Neo4j */
 public class VersionQuery {
 
     enum Neo4jVersion {
@@ -15,19 +13,18 @@ public class VersionQuery {
     }
 
     private static final String QUERY =
-        "call dbms.components() yield versions unwind versions as version return version;";
+            "call dbms.components() yield versions unwind versions as version return version;";
 
     public static Neo4jVersion determineVersion(Driver driver) {
         try (Session s = driver.session()) {
             return s.readTransaction(
-                tx ->
-                    tx.run(QUERY).list().stream()
-                        .findFirst()
-                        .map(r -> r.get(0).asString())
-                        .map(VersionQuery::toVersion)
-                        .orElse(null));
-        }
-        catch (Exception e) {
+                    tx ->
+                            tx.run(QUERY).list().stream()
+                                    .findFirst()
+                                    .map(r -> r.get(0).asString())
+                                    .map(VersionQuery::toVersion)
+                                    .orElse(null));
+        } catch (Exception e) {
             throw new IllegalStateException(e);
         }
     }
@@ -42,7 +39,6 @@ public class VersionQuery {
         if (ver.startsWith("4.2")) {
             return Neo4jVersion.v4_2;
         }
-        throw new IllegalArgumentException(
-            "Unknown version " + ver);
+        throw new IllegalArgumentException("Unknown version " + ver);
     }
 }

@@ -4,7 +4,6 @@ import static java.util.stream.Collectors.joining;
 import static org.neo4j.tool.util.Print.println;
 
 import com.google.gson.GsonBuilder;
-
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
@@ -15,7 +14,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
-
 import org.neo4j.driver.AuthTokens;
 import org.neo4j.driver.Config;
 import org.neo4j.driver.Driver;
@@ -28,10 +26,8 @@ import org.neo4j.driver.summary.ResultSummary;
 import org.neo4j.internal.helpers.collection.Iterables;
 import org.neo4j.tool.VersionQuery.Neo4jVersion;
 import org.neo4j.tool.dto.IndexData;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import picocli.CommandLine.Option;
 
 abstract class AbstractIndexCommand implements Runnable {
@@ -39,34 +35,33 @@ abstract class AbstractIndexCommand implements Runnable {
     private static final Logger LOG = LoggerFactory.getLogger(AbstractIndexCommand.class);
 
     @Option(
-        names = {"-n", "--no_auth"},
-        description = "No authentication.")
+            names = {"-n", "--no_auth"},
+            description = "No authentication.")
     protected boolean noAuth;
 
     @Option(
-        names = {"-a", "--url"},
-        description = "Neo4j URL",
-        defaultValue = "${NEO4J_URL:-bolt://localhost:7687}")
+            names = {"-a", "--url"},
+            description = "Neo4j URL",
+            defaultValue = "${NEO4J_URL:-bolt://localhost:7687}")
     protected String uri;
 
     @Option(
-        names = {"-u", "--username"},
-        description = "Neo4j Username",
-        defaultValue = "${NEO4J_USERNAME}")
+            names = {"-u", "--username"},
+            description = "Neo4j Username",
+            defaultValue = "${NEO4J_USERNAME}")
     protected String username;
 
     @Option(
-        names = {"-p", "--password"},
-        description = "Neo4j Password",
-        defaultValue = "${NEO4J_PASSWORD}")
+            names = {"-p", "--password"},
+            description = "Neo4j Password",
+            defaultValue = "${NEO4J_PASSWORD}")
     protected String password;
 
     @Override
     public void run() {
         try (final var driver = buildDriver(uri, username, password, noAuth)) {
             execute(driver);
-        }
-        catch (IOException ioe) {
+        } catch (IOException ioe) {
             throw new IllegalStateException(ioe);
         }
     }
@@ -87,8 +82,7 @@ abstract class AbstractIndexCommand implements Runnable {
                 println("Attempting to connect with basic authentication.");
                 final var token = AuthTokens.basic(username, password);
                 return GraphDatabase.driver(uri, token, config);
-            }
-            catch (ServiceUnavailableException ex) {
+            } catch (ServiceUnavailableException ex) {
                 LOG.error("Failed to connect retrying..");
             }
         }
@@ -97,17 +91,17 @@ abstract class AbstractIndexCommand implements Runnable {
 
     static IndexData fromRecord(Record record) {
         return IndexData.builder()
-            .id(record.get(0).asLong())
-            .name(record.get(1).asString())
-            .state(record.get(2).asString())
-            .populationPercent(record.get(3).asFloat())
-            .uniqueness("UNIQUE".equalsIgnoreCase(record.get(4).asString()))
-            .type(record.get(5).asString())
-            .entityType(record.get(6).asString())
-            .labelsOrTypes(toList(record.get(7)))
-            .properties(toList(record.get(8)))
-            .indexProvider(record.get(9).asString())
-            .build();
+                .id(record.get(0).asLong())
+                .name(record.get(1).asString())
+                .state(record.get(2).asString())
+                .populationPercent(record.get(3).asFloat())
+                .uniqueness("UNIQUE".equalsIgnoreCase(record.get(4).asString()))
+                .type(record.get(5).asString())
+                .entityType(record.get(6).asString())
+                .labelsOrTypes(toList(record.get(7)))
+                .properties(toList(record.get(8)))
+                .indexProvider(record.get(9).asString())
+                .build();
     }
 
     static List<String> toList(Value value) {
@@ -142,8 +136,7 @@ abstract class AbstractIndexCommand implements Runnable {
                 final var index = gson.fromJson(line, IndexData.class);
                 ret.add(index);
             }
-        }
-        catch (IOException ioe) {
+        } catch (IOException ioe) {
             throw new IllegalStateException(ioe);
         }
         return ret;
@@ -154,8 +147,7 @@ abstract class AbstractIndexCommand implements Runnable {
         println(query);
         try {
             writeTransaction(driver, query);
-        }
-        catch (Throwable th) {
+        } catch (Throwable th) {
             LOG.error("Failed to create index: {}", query, th);
             throw new RuntimeException(th);
         }
@@ -169,8 +161,7 @@ abstract class AbstractIndexCommand implements Runnable {
             }
             try {
                 Thread.sleep(1000);
-            }
-            catch (InterruptedException e) {
+            } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
         }
@@ -178,7 +169,7 @@ abstract class AbstractIndexCommand implements Runnable {
     }
 
     void createIndexWaitForCompletion(
-        final Driver driver, final Neo4jVersion version, final IndexData index) {
+            final Driver driver, final Neo4jVersion version, final IndexData index) {
         createIndex(driver, version, index);
 
         if (!validIndex(driver, index)) {
@@ -232,12 +223,12 @@ abstract class AbstractIndexCommand implements Runnable {
 
         // create an index
         final String IDX_FMT =
-            "CREATE INDEX %s IF NOT EXISTS FOR (n:`%s`) ON (%s) OPTIONS { indexProvider: '%s' };";
+                "CREATE INDEX %s IF NOT EXISTS FOR (n:`%s`) ON (%s) OPTIONS { indexProvider: '%s' };";
         final String indexProvider = indexData.getIndexProvider();
         // make sure to quote all the properties of an index
         final UnaryOperator<String> propFx = p -> "n.`" + p + "`";
         final String properties =
-            indexData.getProperties().stream().map(propFx).collect(joining(","));
+                indexData.getProperties().stream().map(propFx).collect(joining(","));
         return String.format(IDX_FMT, name, label, properties, indexProvider);
     }
 
@@ -247,11 +238,11 @@ abstract class AbstractIndexCommand implements Runnable {
         try (Session session = driver.session()) {
             assert session != null;
             return session.readTransaction(
-                tx -> {
-                    final var result = tx.run(String.format(FMT, name));
-                    final var record = Iterables.firstOrNull(result.list());
-                    return (null == record) ? -1 : record.get(0).asFloat();
-                });
+                    tx -> {
+                        final var result = tx.run(String.format(FMT, name));
+                        final var record = Iterables.firstOrNull(result.list());
+                        return (null == record) ? -1 : record.get(0).asFloat();
+                    });
         }
     }
 
@@ -262,25 +253,22 @@ abstract class AbstractIndexCommand implements Runnable {
                 wrt.write(gson.toJson(index));
                 wrt.newLine();
             }
-        }
-        catch (IOException ioe) {
+        } catch (IOException ioe) {
             throw new IllegalStateException(ioe);
         }
     }
 
-    /**
-     * Read all the index and constraints in order, of constrains first.
-     */
+    /** Read all the index and constraints in order, of constrains first. */
     List<IndexData> readIndexes(Driver driver) {
         try (Session session = driver.session()) {
             assert session != null;
             return session.readTransaction(
-                tx -> {
-                    final var result = tx.run("show indexes;");
-                    return result.list().stream()
-                        .map(AbstractIndexCommand::fromRecord)
-                        .collect(Collectors.toList());
-                });
+                    tx -> {
+                        final var result = tx.run("show indexes;");
+                        return result.list().stream()
+                                .map(AbstractIndexCommand::fromRecord)
+                                .collect(Collectors.toList());
+                    });
         }
     }
 
@@ -295,8 +283,7 @@ abstract class AbstractIndexCommand implements Runnable {
         println(query);
         try {
             writeTransaction(driver, query);
-        }
-        catch (Throwable th) {
+        } catch (Throwable th) {
             LOG.error("Failed to drop index: {}", query, th);
         }
     }
