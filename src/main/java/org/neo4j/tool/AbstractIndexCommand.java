@@ -24,12 +24,14 @@ import org.neo4j.driver.v1.Driver;
 import org.neo4j.driver.v1.GraphDatabase;
 import org.neo4j.driver.v1.Record;
 import org.neo4j.driver.v1.Session;
+import org.neo4j.driver.v1.Transaction;
 import org.neo4j.driver.v1.Value;
 import org.neo4j.driver.v1.exceptions.ServiceUnavailableException;
 import org.neo4j.driver.v1.summary.ResultSummary;
 import org.neo4j.helpers.collection.Iterables;
-import org.neo4j.register.Register.Int.In;
 import org.neo4j.tool.dto.IndexData;
+import org.neo4j.tool.dto.IndexStatus;
+import org.neo4j.tool.dto.IndexStatus.State;
 
 import lombok.val;
 import picocli.CommandLine.Option;
@@ -99,10 +101,9 @@ abstract class AbstractIndexCommand implements Runnable {
     }
 
     //description	tokenNames	properties	state	type	progress	provider	failureMessage
-    static IndexData fromRecord(Record record) {
+    IndexData fromRecord(Record record) {
         return IndexData.builder()
             .id(record.get("id").asLong())
-            .name(record.get("indexName").asString())
             .state(record.get("state").asString())
             .populationPercent(record.get("progress").asFloat())
             .uniqueness(record.get("type").asString("").contains("unique"))
@@ -114,7 +115,7 @@ abstract class AbstractIndexCommand implements Runnable {
     }
 
     private static String toIndexProvider(Value provider) {
-        return Optional.ofNullable(provider.asMap()).map(m -> (String)m.get("key")).orElse(null);
+        return Optional.ofNullable(provider.asMap()).map(m -> (String) m.get("key")).orElse(null);
     }
 
     static List<String> toList(Value value) {
@@ -175,7 +176,8 @@ abstract class AbstractIndexCommand implements Runnable {
     boolean validIndex(final Driver driver, final IndexData index) {
         // insure index creation started
         for (int i = 0; i < 10; i++) {
-            if (indexProgress(driver, index.getName()) >= 0.0) {
+            val status = indexProgress(driver, index);
+            if (null != status && status.getState().isOk()) {
                 return true;
             }
             try {
@@ -188,12 +190,11 @@ abstract class AbstractIndexCommand implements Runnable {
         return false;
     }
 
-    void createIndexWaitForCompletion(
-        final Driver driver, final IndexData index) {
+    void createIndexWaitForCompletion(final Driver driver, final IndexData index) {
         createIndex(driver, index);
-
+        val q = indexOrConstraintQuery(index);
         if (!validIndex(driver, index)) {
-            println("Failed to create index: %s", index.getName());
+            println("Failed to execute: %s", q);
             return;
         }
 
@@ -201,7 +202,12 @@ abstract class AbstractIndexCommand implements Runnable {
         int pct = 0;
         while (pct < 100) {
             progressPercentage(pct);
-            pct = (int) indexProgress(driver, index.getName());
+            val status = indexProgress(driver, index);
+            if (status.getState().isFailed()) {
+                println("%nFailed to execute: %s", q);
+                return;
+            }
+            pct = (int) status.getProgress();
             progressPercentage(pct);
         }
     }
@@ -210,7 +216,7 @@ abstract class AbstractIndexCommand implements Runnable {
         // query for all the indexes
         try (Session session = driver.session()) {
             assert session != null;
-            ResultSummary resultSummary = session.writeTransaction(tx -> tx.run(query).consume());
+            val resultSummary = session.writeTransaction(tx -> tx.run(query).consume());
             if (LOG.isDebugEnabled()) {
                 LOG.debug(resultSummary.toString());
             }
@@ -220,7 +226,7 @@ abstract class AbstractIndexCommand implements Runnable {
     String indexQuery(IndexData indexData) {
         final String label = Iterables.firstOrNull(indexData.getLabelsOrTypes());
         // create an index
-        final String IDX_FMT = "CREATE INDEX (n:`%s`) ON (%s);";
+        final String IDX_FMT = "CREATE INDEX :`%s`(%s);";
         // make sure to quote all the properties of an index
         return String.format(IDX_FMT, label, propertiesArgument(indexData));
     }
@@ -232,27 +238,49 @@ abstract class AbstractIndexCommand implements Runnable {
         final String firstProp = Iterables.firstOrNull(indexData.getProperties());
         return String.format(format, label, firstProp);
     }
+
     String indexOrConstraintQuery(IndexData indexData) {
         return indexData.isUniqueness() ? constraintQuery(indexData) : indexQuery(indexData);
     }
 
     String propertiesArgument(IndexData indexData) {
-        final UnaryOperator<String> propFx = p -> "n.`" + p + "`";
+        final UnaryOperator<String> propFx = p -> '`' + p + '`';
         return indexData.getProperties().stream().map(propFx).collect(joining(","));
     }
 
-    float indexProgress(final Driver driver, String name) {
-        final String FMT = "show indexes yield populationPercent, name WHERE name = \"%s\"";
+    IndexStatus indexProgress(final Driver driver, IndexData index) {
         // query for all the indexes
-        try (Session session = driver.session()) {
+        try (final Session session = driver.session()) {
             assert session != null;
-            return session.readTransaction(
-                tx -> {
-                    val result = tx.run(String.format(FMT, name));
-                    val record = Iterables.firstOrNull(result.list());
-                    return (null == record) ? -1 : record.get(0).asFloat();
-                });
+            return session.readTransaction(tx -> toIndexState(tx, index));
         }
+    }
+
+    IndexStatus toIndexState(Transaction tx, IndexData index) {
+        val fmt = "call db.indexes() yield description, state, progress WHERE description contains \":%s(%s)\" return state, progress";
+        val props = String.join(",", index.getProperties());
+        val label = Iterables.firstOrNull(index.getLabelsOrTypes());
+        val result = tx.run(String.format(fmt, label, props));
+        val record = Iterables.firstOrNull(result.list());
+        if (null == record) {
+            return IndexStatus.builder().state(State.FAILED).build();
+        }
+        val pct = record.get("populationPercent").asFloat();
+        val state = record.get("state").asString("");
+        return IndexStatus.builder().progress(pct).state(toState(state)).build();
+    }
+
+    IndexStatus.State toState(String state) {
+        if (state.equalsIgnoreCase("FAILED")) {
+            return State.FAILED;
+        }
+        if (state.equalsIgnoreCase("ONLINE")) {
+            return State.ONLINE;
+        }
+        if (state.equalsIgnoreCase("POPULATING")) {
+            return State.POPULATING;
+        }
+        return State.OTHER;
     }
 
     void writeIndexes(List<IndexData> indexes) {
@@ -278,15 +306,17 @@ abstract class AbstractIndexCommand implements Runnable {
                 tx -> tx.run("call db.indexes();")
                     .list()
                     .stream()
-                    .map(AbstractIndexCommand::fromRecord)
+                    .map(this::fromRecord)
                     .collect(Collectors.toList()));
         }
     }
 
     String dropQuery(final IndexData data) {
-        final String label = Iterables.firstOrNull(data.getLabelsOrTypes());
+        val label = Iterables.firstOrNull(data.getLabelsOrTypes());
         if (data.isUniqueness()) {
             val fmt = "DROP CONSTRAINT ON (n:`%s`) ASSERT n.`%s` IS UNIQUE;";
+            val firstProp = Iterables.firstOrNull(data.getProperties());
+            return String.format(fmt, label, firstProp);
         }
         val fmt = "DROP INDEX ON :`%s`(%s);";
         return String.format(fmt, label, propertiesArgument(data));
