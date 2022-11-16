@@ -1,60 +1,92 @@
-NOTES:
+# Store-Utils Neo4j Database Compaction and Index Maintenance
 
-Store-Util is a utility that Will has forked from an existing Neo4j project that enables copying of a Neo4j database.  As part of this copy, it only grabs valid nodes to include in the copy.
+This project was inspired by the work of Michael Hunger in the *store-utils* and so its a fork, mostly a rewrite of that effort.  Its also a continuation 
+for the 4.x community edition.
 
-The Utility is built against Neo4j 4.4, so if running against an earlier version, you’ll need to upgrade.
+## Use Cases:
 
-Once you have the Store-Util tar from Will, and have expanded it into a directory on the target machine, navigate to the root directory where you unpacked Store-Util and you’ll need to do the following steps:
+The use cases form around either compaction/optimization for a long running database or optimization after a large deletion. Neo4j will attempt to recover space, but often it's just better to de-fragment or compact the database to restore it to optimal performance.
 
-Dump the indexes
+Examples:
+* Overrun of data that was deleted and now the database is abnormally large.
+* Large deletion required to clean the database of no longer used data.
 
+NOTE: 
+It's generally better to label nodes to be deleted and the use this tool to do the actual deletion in a maintenance window. For large scale deletions, for 
+those that well over 10 million nodes.
 
-./bin/dump --filename neo4j_indexes.dump
-This runs a show indexes against the neo4j database and dumps all the indexes to a the file neo4j_indexes.dump.  You’ll need this to recreate the indexes after you copy the database since the utility does not copy over indexes.
+## Overview
 
-Stop Neo4j
+There are basically 4 parts to the optimization process.
 
-Neo4j needs to be stopped prior to running the copy.
-
-
-systemctl stop neo4j
-Run the Copy Utility
-
-
-./bin/copy /data/neo4j /data/copy
-This is the step that copies over the data.  It will take some time to run.  In the Neo4j directory, it will copy the contents of the neo4j database into a new folder (in this case copy).
-
-Rename neo4j to Backup
+* Determine the existing indexes in the data
+* Optimize the data, copy source to target filtering out nodes to delete
+* Add the users to the new copy of the database
+* Rebuilding the indexes in the target copy
 
 
-mv /data/neo4j /data/backups
-Rename copy to neo4j
+## Preparation
+
+* There must be sufficient space to copy the database to a target directory. The target must be at least the same size as the source, just in case there's no 
+optimization to be done.
+* The current usernames and passwords must be available in order to create them after the copy.
+* There must a sufficient window of time to do the copy as it can be quite long in relationship to the size of the database.
 
 
-mv /data/copy /data/neo4j
-Uncomment auth_enabled=false
+## Procedure
 
-In the /etc/neo4j/neo4j.conf file, you’ll need to uncomment the line dbms.security.auth_enabled=false.  The database doesn’t have users yet, so you’ll need this to allow you to connect to the database.
+### Step 1.
+Download the store-util distribution for the particular Neo4j version. The version of Neo4j is prefixed The 4.4.x releases handle Neo4j 4.4 and 4.3, 
+respectively. There will be a 3.5.x release that will handle all Neo4j 3.5.x releases. **_Note_** though during the copy the Neo4j storage will be upgraded to the 
+version that `store-utils` was built with.
 
-Start Neo4j database
+### Step 2.
+Extract the distribution to a local directory.
 
-At this point, you’ll need to restart Neo4j
+### Step 3.
+
+Dump the index and constraint definitions to a file. Neo4j must be running.
+
+    $ ./bin/dump
+
+This command will authenticate to Neo4j and write all the index definitions to dump.json.  Each CLI command comes with help by convention of -h or --help.
+
+Included with the dump command is the ability to change the index provider based on the attribute name. Given the type of data in the Brinqa database its better to have certain attributes use the Lucene index rather than BTree. Below is a common example but if there’s other low cardinally attributes they should be added here.
+
+    $ ./bin/dump -l __dataModel__ 
+
+NOTE: This command will use the local environment variables to authenticate to Neo4j. 
+
+    NEO4J_URL
+    NEO4J_USERNAME
+    NEO4J_PASSWORD
 
 
-systemctl start neo4j
-Create Users
+### Step 4.
+Run the optimization process such that it rebuilds the database in another directory.
 
-You’ll need to create the two users, one identified in the /opt/brinqa/conf/brinqa.yml file in the neo4j section, generally username starting with b, and root user identifies in the environment variables NEO4J_USERNAME and NEO4J_PASSWORD.
+    $ ./bin/storeCopy /data/neo4j /data/neo4j-optimized
 
-Once you have these users, open a cypher-shell and execute the following for each user:
+This process can take several hours to process proportional to the size of the database and the percentage of fragmented space.
 
+### Step 5.
 
-CREATE USER [username] SET PASSWORD '[password]' SET PASSWORD CHANGE NOT REQUIRED SET HOME DATABASE neo4j;
-Load Indexes
+Replace the old source directory with the new target directory applied above. Then start the database and monitor for issues. Optional run 
 
-As the last step, you can run the store-util load script to recreate the indexes.
+    $ neo4j-admin consistency-check 
 
+to see if the database is proper.
 
-./bin/load -f neo4j_indexes.dump
-This process currently hangs on constraints against labels with no rows.  Until this gets corrected, you should separate out the constraints from the indexes, and run them separately.  
+### Step 6.
 
+Recreate the users see https://neo4j.com/docs/cypher-manual/current/access-control/manage-users/
+
+### Step 7.
+
+Rebuilding the indexes, the tool can use the dump.json file created in the Step 3. to recreate the indexes.
+
+    $ ./bin/load -f dump.json
+
+This process can take a few hours to complete based on the size of the data.
+
+NOTE: This command will use the local environment variables to authenticate to Neo4j.
