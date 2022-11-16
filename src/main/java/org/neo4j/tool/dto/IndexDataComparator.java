@@ -11,7 +11,7 @@ public class IndexDataComparator implements Comparator<IndexData> {
     @Override
     public int compare(IndexData o1, IndexData o2) {
         // constraints first
-        int cmp = Boolean.compare(o1.isUniqueness(), o2.isUniqueness());
+        int cmp = Boolean.compare(o2.isUniqueness(), o1.isUniqueness());
         if (0 != cmp) {
             return cmp;
         }

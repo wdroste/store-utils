@@ -27,7 +27,6 @@ import org.neo4j.driver.v1.Session;
 import org.neo4j.driver.v1.Transaction;
 import org.neo4j.driver.v1.Value;
 import org.neo4j.driver.v1.exceptions.ServiceUnavailableException;
-import org.neo4j.driver.v1.summary.ResultSummary;
 import org.neo4j.helpers.collection.Iterables;
 import org.neo4j.tool.dto.IndexData;
 import org.neo4j.tool.dto.IndexStatus;
@@ -161,7 +160,7 @@ abstract class AbstractIndexCommand implements Runnable {
         return ret;
     }
 
-    void createIndex(final Driver driver, IndexData index) {
+    void createIndexOrConstraint(final Driver driver, IndexData index) {
         val query = indexOrConstraintQuery(index);
         println(query);
         try {
@@ -191,7 +190,7 @@ abstract class AbstractIndexCommand implements Runnable {
     }
 
     void createIndexWaitForCompletion(final Driver driver, final IndexData index) {
-        createIndex(driver, index);
+        createIndexOrConstraint(driver, index);
         val q = indexOrConstraintQuery(index);
         if (!validIndex(driver, index)) {
             println("Failed to execute: %s", q);
@@ -226,7 +225,7 @@ abstract class AbstractIndexCommand implements Runnable {
     String indexQuery(IndexData indexData) {
         final String label = Iterables.firstOrNull(indexData.getLabelsOrTypes());
         // create an index
-        final String IDX_FMT = "CREATE INDEX :`%s`(%s);";
+        final String IDX_FMT = "CREATE INDEX ON :`%s`(%s);";
         // make sure to quote all the properties of an index
         return String.format(IDX_FMT, label, propertiesArgument(indexData));
     }
@@ -265,7 +264,7 @@ abstract class AbstractIndexCommand implements Runnable {
         if (null == record) {
             return IndexStatus.builder().state(State.FAILED).build();
         }
-        val pct = record.get("populationPercent").asFloat();
+        val pct = record.get("progress").asFloat(0);
         val state = record.get("state").asString("");
         return IndexStatus.builder().progress(pct).state(toState(state)).build();
     }

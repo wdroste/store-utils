@@ -17,6 +17,10 @@ public class IndexStatus {
         public boolean isOk() {
             return ONLINE == this || POPULATING == this;
         }
+
+        public boolean isOnline() {
+            return ONLINE == this;
+        }
     }
 
     State state;
