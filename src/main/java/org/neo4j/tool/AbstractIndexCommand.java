@@ -29,7 +29,6 @@ import org.neo4j.tool.VersionQuery.Neo4jVersion;
 import org.neo4j.tool.dto.IndexData;
 import org.neo4j.tool.dto.IndexStatus;
 import org.neo4j.tool.dto.IndexStatus.State;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import picocli.CommandLine.Option;
@@ -219,7 +218,7 @@ abstract class AbstractIndexCommand implements Runnable {
         }
     }
 
-    String indexQuery(Neo4jVersion version, IndexData indexData) {
+    String indexQuery(IndexData indexData) {
         final String name = indexData.getName();
         final String label = Iterables.firstOrNull(indexData.getLabelsOrTypes());
 
@@ -247,7 +246,7 @@ abstract class AbstractIndexCommand implements Runnable {
     String indexOrConstraintQuery(Neo4jVersion version, IndexData indexData) {
         return indexData.isUniqueness()
                 ? constraintQuery(version, indexData)
-                : indexQuery(version, indexData);
+                : indexQuery(indexData);
     }
 
     IndexStatus indexProgress(final Driver driver, String name) {
@@ -276,7 +275,6 @@ abstract class AbstractIndexCommand implements Runnable {
         if (state.equalsIgnoreCase("POPULATING")) return State.POPULATING;
         return State.OTHER;
     }
-
 
     void writeIndexes(List<IndexData> indexes) {
         final var gson = new GsonBuilder().create();

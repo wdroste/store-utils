@@ -8,7 +8,10 @@ import lombok.Value;
 public class IndexStatus {
 
     public enum State {
-        ONLINE, POPULATING, FAILED, OTHER;
+        ONLINE,
+        POPULATING,
+        FAILED,
+        OTHER;
 
         public boolean isFailed() {
             return FAILED == this || OTHER == this;
