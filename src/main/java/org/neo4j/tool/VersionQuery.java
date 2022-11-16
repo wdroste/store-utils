@@ -2,6 +2,7 @@ package org.neo4j.tool;
 
 import org.neo4j.driver.Driver;
 import org.neo4j.driver.Session;
+import org.neo4j.driver.Transaction;
 
 /** Determine the version of Neo4j */
 public class VersionQuery {
@@ -17,16 +18,18 @@ public class VersionQuery {
 
     public static Neo4jVersion determineVersion(Driver driver) {
         try (Session s = driver.session()) {
-            return s.readTransaction(
-                    tx ->
-                            tx.run(QUERY).list().stream()
-                                    .findFirst()
-                                    .map(r -> r.get(0).asString())
-                                    .map(VersionQuery::toVersion)
-                                    .orElse(null));
+            return s.readTransaction(VersionQuery::toVersion);
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    static Neo4jVersion toVersion(Transaction tx) {
+        return tx.run(QUERY).list().stream()
+                .findFirst()
+                .map(r -> r.get(0).asString())
+                .map(VersionQuery::toVersion)
+                .orElse(null);
     }
 
     static Neo4jVersion toVersion(String ver) {
