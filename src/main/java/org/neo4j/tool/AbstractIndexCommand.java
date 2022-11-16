@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
@@ -108,7 +109,12 @@ abstract class AbstractIndexCommand implements Runnable {
             .type(record.get(5).asString())
             .labelsOrTypes(toList(record.get("tokenNames")))
             .properties(toList(record.get("properties")))
+            .indexProvider(toIndexProvider(record.get("provider")))
             .build();
+    }
+
+    private static String toIndexProvider(Value provider) {
+        return Optional.ofNullable(provider.asMap()).map(m -> (String)m.get("key")).orElse(null);
     }
 
     static List<String> toList(Value value) {
