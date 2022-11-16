@@ -20,12 +20,16 @@ import org.neo4j.driver.Driver;
 import org.neo4j.driver.GraphDatabase;
 import org.neo4j.driver.Record;
 import org.neo4j.driver.Session;
+import org.neo4j.driver.Transaction;
 import org.neo4j.driver.Value;
 import org.neo4j.driver.exceptions.ServiceUnavailableException;
 import org.neo4j.driver.summary.ResultSummary;
 import org.neo4j.internal.helpers.collection.Iterables;
 import org.neo4j.tool.VersionQuery.Neo4jVersion;
 import org.neo4j.tool.dto.IndexData;
+import org.neo4j.tool.dto.IndexStatus;
+import org.neo4j.tool.dto.IndexStatus.State;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import picocli.CommandLine.Option;
@@ -156,7 +160,8 @@ abstract class AbstractIndexCommand implements Runnable {
     boolean validIndex(final Driver driver, final IndexData index) {
         // insure index creation started
         for (int i = 0; i < 10; i++) {
-            if (indexProgress(driver, index.getName()) >= 0.0) {
+            final var status = indexProgress(driver, index.getName());
+            if (null != status && status.getState().isOk()) {
                 return true;
             }
             try {
@@ -181,7 +186,12 @@ abstract class AbstractIndexCommand implements Runnable {
         int pct = 0;
         while (pct < 100) {
             progressPercentage(pct);
-            pct = (int) indexProgress(driver, index.getName());
+            final var status = indexProgress(driver, index.getName());
+            if (status.getState().isFailed()) {
+                println("%nFailed to create index: %s", index.getName());
+                return;
+            }
+            pct = (int) status.getProgress();
             progressPercentage(pct);
         }
     }
@@ -240,19 +250,33 @@ abstract class AbstractIndexCommand implements Runnable {
                 : indexQuery(version, indexData);
     }
 
-    float indexProgress(final Driver driver, String name) {
-        final String FMT = "show indexes yield populationPercent, name WHERE name = \"%s\"";
+    IndexStatus indexProgress(final Driver driver, String name) {
         // query for all the indexes
-        try (Session session = driver.session()) {
+        try (final Session session = driver.session()) {
             assert session != null;
-            return session.readTransaction(
-                    tx -> {
-                        final var result = tx.run(String.format(FMT, name));
-                        final var record = Iterables.firstOrNull(result.list());
-                        return (null == record) ? -1 : record.get(0).asFloat();
-                    });
+            return session.readTransaction(tx -> toIndexState(tx, name));
         }
     }
+
+    IndexStatus toIndexState(Transaction tx, String name) {
+        final String FMT = "show indexes yield populationPercent,name WHERE name = \"%s\"";
+        final var result = tx.run(String.format(FMT, name));
+        final var record = Iterables.firstOrNull(result.list());
+        if (null == record) {
+            return IndexStatus.builder().state(State.FAILED).build();
+        }
+        final var pct = record.get("populationPercent").asFloat();
+        final var state = record.get("state").asString("");
+        return IndexStatus.builder().progress(pct).state(toState(state)).build();
+    }
+
+    IndexStatus.State toState(String state) {
+        if (state.equalsIgnoreCase("FAILED")) return State.FAILED;
+        if (state.equalsIgnoreCase("ONLINE")) return State.ONLINE;
+        if (state.equalsIgnoreCase("POPULATING")) return State.POPULATING;
+        return State.OTHER;
+    }
+
 
     void writeIndexes(List<IndexData> indexes) {
         final var gson = new GsonBuilder().create();
