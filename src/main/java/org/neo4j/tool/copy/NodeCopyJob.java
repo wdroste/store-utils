@@ -101,9 +101,11 @@ public class NodeCopyJob {
         }
 
         long copyNode(long sourceNodeId) {
+            // read previous node data, since it exists
             final var properties = sourceDb.getNodeProperties(sourceNodeId);
             final var labels = Iterables.asList(sourceDb.getNodeLabels(sourceNodeId));
 
+            // create a node object for criteria testing
             final var labelNames = labels.stream().map(Label::name).collect(Collectors.toList());
             final var node = new NodeObject(labelNames, properties);
             if (acceptance.test(node)) {
