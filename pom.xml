@@ -4,7 +4,7 @@
 
     <groupId>org.neo4j</groupId>
     <artifactId>store-utils</artifactId>
-    <version>3.5.35.2</version>
+    <version>3.5.35.3</version>
     <packaging>jar</packaging>
 
     <properties>
