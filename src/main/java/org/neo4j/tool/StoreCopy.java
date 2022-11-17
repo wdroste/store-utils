@@ -1,3 +1,18 @@
+/*
+ * Copyright 2002 Brinqa, Inc. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.neo4j.tool;
 
 import static org.neo4j.configuration.GraphDatabaseSettings.allow_upgrade;
@@ -13,7 +28,8 @@ import static org.neo4j.tool.util.Print.println;
 
 import java.io.Closeable;
 import java.io.File;
-import java.util.HashSet;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.util.Set;
 import org.eclipse.collections.api.map.primitive.LongLongMap;
 import org.neo4j.batchinsert.BatchInserter;
@@ -55,9 +71,9 @@ public class StoreCopy implements Runnable {
     private File sourceConfigurationFile;
 
     @Option(
-            names = {"-d", "--deleteWithLabel"},
-            description = "Nodes to delete with the specified label.")
-    private Set<String> deleteNodesByLabel = new HashSet<>();
+            names = {"-s", "--script"},
+            description = "Script that provides acceptance criteria for a node to be copied.")
+    private File script;
 
     // this example implements Callable, so parsing, error handling and handling user
     // requests for usage help or version help can be done with one line of code.
@@ -78,6 +94,7 @@ public class StoreCopy implements Runnable {
         private final HighestInfo highestInfo;
         private final BatchInserter sourceDb;
         private final BatchInserter targetDb;
+        private final String acceptanceScript;
 
         public StoreCopyJob() {
             // check source directory
@@ -106,7 +123,7 @@ public class StoreCopy implements Runnable {
             final var sourceConfig = sourceCfgBld.build();
 
             // change the target directory for the data
-            Config targetConfig =
+            final var targetConfig =
                     Config.newBuilder()
                             .fromConfig(sourceConfig)
                             .set(read_only_databases, Set.of())
@@ -117,9 +134,6 @@ public class StoreCopy implements Runnable {
             final var srcPath = sourceConfig.get(data_directory);
 
             println("Copying from %s to %s", srcPath, targetDataDirectory);
-            if (!deleteNodesByLabel.isEmpty()) {
-                println("Delete nodes with label(s): %s", deleteNodesByLabel);
-            }
 
             // avoid nasty warning
             org.neo4j.internal.unsafe.IllegalAccessLoggerSuppressor.suppress();
@@ -132,14 +146,19 @@ public class StoreCopy implements Runnable {
             // create inserters
             this.sourceDb = newBatchInserter(sourceConfig);
             this.targetDb = newBatchInserter(targetConfig);
+
+            try {
+                this.acceptanceScript = script != null ? Files.readString(script.toPath()) : null;
+            } catch (IOException e) {
+                throw new IllegalArgumentException(e);
+            }
         }
 
         @Override
         public void run() {
             // copy nodes from source to target
             final var nodeCopyJob =
-                    new NodeCopyJob(
-                            highestInfo.getNodeId(), sourceDb, targetDb, deleteNodesByLabel);
+                    new NodeCopyJob(highestInfo.getNodeId(), sourceDb, targetDb, acceptanceScript);
             final LongLongMap copiedNodeIds = nodeCopyJob.process();
 
             // copy relationships from source to target
