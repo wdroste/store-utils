@@ -21,12 +21,7 @@ public class IndexDataComparator implements Comparator<IndexData> {
             return cmp;
         }
         // compare labels
-        cmp = stringListComparator.compare(o1.getLabelsOrTypes(), o2.getLabelsOrTypes());
-        if (0 != cmp) {
-            return cmp;
-        }
-        // name
-        return o1.getName().compareTo(o2.getName());
+        return stringListComparator.compare(o1.getLabelsOrTypes(), o2.getLabelsOrTypes());
     }
 
     /** Just sort based on number of items in list first (more complex) to least complex. */
