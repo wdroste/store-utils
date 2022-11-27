@@ -72,7 +72,8 @@ public class StoreCopy implements Runnable {
 
     @Option(
             names = {"-s", "--scriptFile"},
-            description = "Groovy script file that provides acceptance criteria for a node to be copied.")
+            description =
+                    "Groovy script file that provides acceptance criteria for a node to be copied.")
     private File script;
 
     // this example implements Callable, so parsing, error handling and handling user
