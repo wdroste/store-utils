@@ -1,11 +1,16 @@
 # Store-Utils Neo4j Database Compaction and Index Maintenance
 
-This project was inspired by the work of Michael Hunger in the *store-utils* and so its a fork, mostly a rewrite of that effort.  Its also a continuation 
+This project was inspired by the work of Michael Hunger in the *store-utils* and so its a fork, mostly a rewrite of that effort.  It's also a continuation 
 for the 4.x community edition.
 
 ## Use Cases:
 
-The use cases form around either compaction/optimization for a long running database or optimization after a large deletion. Neo4j will attempt to recover space, but often it's just better to de-fragment or compact the database to restore it to optimal performance.
+The use cases form around either compaction/optimization for a long-running database or optimization after a large deletion. Neo4j will attempt to recover 
+space, but often it's just better to de-fragment or compact the database to restore it to optimal performance. There's also the question of corruption, this 
+tool attempts to filter the corrupted nodes and relationships. It won't be able to repair the database but in general it will get to a working state. After 
+any compact the indexes must be rebuilt. The commands here help facilitate that, since at times the process can be cumbersome. For instance in production, 
+there have been times when Neo4j gets overwhelmed trying to re-create the indexes and since they're done in a transaction, the creation can get reverts. 
+Basically this results in an infinite loop of creation, crash, creation, crash, so on and so on. 
 
 Examples:
 * Overrun of data that was deleted and now the database is abnormally large.
@@ -90,3 +95,17 @@ Rebuilding the indexes, the tool can use the dump.json file created in the Step 
 This process can take a few hours to complete based on the size of the data.
 
 NOTE: This command will use the local environment variables to authenticate to Neo4j.
+
+
+## Tips:
+
+The file created by dump is new line delimited JSON or JSON object per line file. This means that if there's an index or constraint that needs to be 
+filtered the line in which it exists can just be removed.
+
+## Known Issues:
+
+* Setting the `load` command to `recreate` each index can fail unexpectedly. Neo4j can randomly fail if there's a drop/create of an index or constraint. The 
+  solution is to manually delete the and create the index. The `recreate` should be used sparingly. And filter all the lines in the dump file up to that 
+  point and start again.
+* Neo4j can at times see a unique index, but it won't show on `SHOW CONTRAINTS` even it was created as a constraint. The workaround is to drop the index 
+  and create the constraint again manually with the same name so `load` can skip it.
