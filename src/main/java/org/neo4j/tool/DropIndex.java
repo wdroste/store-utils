@@ -19,7 +19,6 @@ import static org.neo4j.tool.util.Print.println;
 
 import java.io.File;
 import java.util.List;
-import org.neo4j.driver.Driver;
 import org.neo4j.tool.dto.IndexData;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
@@ -51,18 +50,13 @@ public class DropIndex extends AbstractIndexCommand {
     }
 
     @Override
-    void execute(final Driver driver) {
+    void execute(final IndexManager indexManager) {
         // query for all the indexes
-        final List<IndexData> indexes = readIndexesFromFile(this.file);
+        final List<IndexData> indexes = indexManager.readIndexesFromFile(this.file);
         println("Dropping indexes from file: %s", this.file.getAbsoluteFile());
         for (IndexData index : indexes) {
             println("Dropping %s", index.getName());
-            dropIndex(driver, index);
+            indexManager.dropIndex(index);
         }
-    }
-
-    @Override
-    String getFilename() {
-        return this.file.getName();
     }
 }

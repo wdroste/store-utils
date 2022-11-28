@@ -17,10 +17,10 @@ package org.neo4j.tool;
 
 import static org.neo4j.tool.util.Print.println;
 
+import java.io.File;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
-import org.neo4j.driver.Driver;
 import org.neo4j.tool.dto.IndexData;
 import org.neo4j.tool.dto.IndexDataComparator;
 import picocli.CommandLine;
@@ -43,7 +43,7 @@ public class DumpIndex extends AbstractIndexCommand {
             names = {"-f", "--filename"},
             description = "Name of the file to dump.",
             defaultValue = "dump.json")
-    protected String filename;
+    protected File file;
 
     @Option(
             names = {"-l", "--lucene"},
@@ -58,17 +58,17 @@ public class DumpIndex extends AbstractIndexCommand {
     }
 
     @Override
-    void execute(final Driver driver) {
+    void execute(final IndexManager indexManager) {
         // query for all the indexes
-        final List<IndexData> indexes = readIndexes(driver);
-        println("Building index file: %s", this.filename);
+        final List<IndexData> indexes = indexManager.readIndexes();
+        println("Building index file: %s", this.file);
         final List<IndexData> writeIndexes =
                 (lucene == null || lucene.isEmpty()) ? indexes : luceneIndex(indexes);
         final List<IndexData> sortedIndexes =
                 writeIndexes.stream()
                         .sorted(new IndexDataComparator())
                         .collect(Collectors.toList());
-        writeIndexes(sortedIndexes);
+        indexManager.writeIndexes(sortedIndexes, this.file);
     }
 
     /** Substitute the index for lucene */
@@ -83,10 +83,5 @@ public class DumpIndex extends AbstractIndexCommand {
 
     IndexData modifyIndexProvider(IndexData data) {
         return data.toBuilder().indexProvider("lucene+native-3.0").build();
-    }
-
-    @Override
-    String getFilename() {
-        return this.filename;
     }
 }

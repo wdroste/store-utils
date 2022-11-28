@@ -15,40 +15,34 @@
  */
 package org.neo4j.tool;
 
-import static java.util.stream.Collectors.toUnmodifiableSet;
 import static org.neo4j.tool.util.Print.println;
 
-import java.util.Set;
+import java.io.File;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.neo4j.driver.Driver;
-import org.neo4j.tool.VersionQuery.Neo4jVersion;
 import org.neo4j.tool.dto.IndexData;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
 /**
  * Takes a dump file and creates each of the constraints and indexes from that file in a controlled
- * manner. In particular it waits until an index is online before moving to the next as adding to
+ * manner. In particular, it waits until an index is online before moving to the next as adding to
  * many indexes at any onetime will result in either an OOME or a corrupted index that will need to
  * be refreshed again.
  */
 @Command(
         name = "loadIndex",
         version = "loadIndex 1.0",
-        description = "Creates indexes and constraints based on the file provided.")
+        description =
+                "Creates indexes and constraints based on the file provided, skips existing indexes and constraints by name.")
 public class LoadIndex extends AbstractIndexCommand {
-
-    private static final Logger LOG = LoggerFactory.getLogger(LoadIndex.class);
 
     @Option(
             required = true,
             names = {"-f", "--filename"},
-            description = "Name of the file to load all the indexes.",
+            description = "File to load all the indexes.",
             defaultValue = "dump.json")
-    protected String filename;
+    protected File file;
 
     @Option(
             names = {"-r", "--recreate"},
@@ -63,36 +57,26 @@ public class LoadIndex extends AbstractIndexCommand {
     }
 
     @Override
-    void execute(final Driver driver) {
-        final var ver = VersionQuery.determineVersion(driver);
-        final var indexNames = recreate ? Set.<String>of() : readIndexNames(driver);
-        final var fileIndexes = readIndexesFromFilename();
+    void execute(final IndexManager indexManager) {
+        final var ver = indexManager.determineVersion();
+        final var indexNames = indexManager.readIndexNames();
+        final var fileIndexes = indexManager.readIndexesFromFile(file);
         final int total = fileIndexes.size();
         final var count = new AtomicInteger();
-        fileIndexes.stream()
-                .peek(ignore -> count.incrementAndGet())
-                .filter(indexData -> !indexData.getLabelsOrTypes().isEmpty())
-                .filter(indexData -> !indexNames.contains(indexData.getName()))
-                .forEach(
-                        indexData -> {
-                            println("Progress: %d/%d", count.get(), total);
-                            build(driver, ver, indexData);
-                        });
-    }
-
-    Set<String> readIndexNames(final Driver driver) {
-        return readIndexes(driver).stream().map(IndexData::getName).collect(toUnmodifiableSet());
-    }
-
-    void build(final Driver driver, final Neo4jVersion version, final IndexData index) {
-        if (recreate) {
-            dropIndex(driver, index);
+        for (IndexData indexData : fileIndexes) {
+            count.incrementAndGet();
+            println("Progress: %d/%d", count.get(), total);
+            if (indexData.getLabelsOrTypes().isEmpty()) {
+                println("Filtering as there's no Label: %s", indexData);
+                continue;
+            }
+            // if recreate always drop and then create
+            if (!recreate && indexNames.contains(indexData.getName())) {
+                println("Index with name '%s' already exists, skipping.", indexData.getName());
+                continue;
+            }
+            // create index
+            indexManager.buildIndexOrConstraint(ver, indexData, recreate);
         }
-        createIndexWaitForCompletion(driver, version, index);
-    }
-
-    @Override
-    String getFilename() {
-        return this.filename;
     }
 }

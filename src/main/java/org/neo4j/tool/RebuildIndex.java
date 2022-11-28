@@ -22,7 +22,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.List;
 import org.apache.commons.lang3.StringUtils;
-import org.neo4j.driver.Driver;
 import org.neo4j.tool.dto.IndexData;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
@@ -54,9 +53,9 @@ public class RebuildIndex extends AbstractIndexCommand {
     }
 
     @Override
-    void execute(final Driver driver) throws IOException {
-        final List<IndexData> indexes = readIndexes(driver);
-        final var ver = VersionQuery.determineVersion(driver);
+    void execute(final IndexManager indexManager) throws IOException {
+        final List<IndexData> indexes = indexManager.readIndexes();
+        final var ver = indexManager.determineVersion();
         String lastIndexName = file.isFile() ? Files.readString(file.toPath()) : null;
         for (final IndexData index : indexes) {
 
@@ -73,14 +72,9 @@ public class RebuildIndex extends AbstractIndexCommand {
 
             // save resume file
             Files.writeString(file.toPath(), index.getName());
-            dropIndex(driver, index);
-            createIndexWaitForCompletion(driver, ver, index);
+            indexManager.dropIndex(index);
+            indexManager.createIndexWaitForCompletion(ver, index);
         }
         println("Last index saved to %s", this.file);
-    }
-
-    @Override
-    String getFilename() {
-        return this.file.getName();
     }
 }
