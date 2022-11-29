@@ -109,3 +109,4 @@ filtered the line in which it exists can just be removed.
   point and start again.
 * Neo4j can at times see a unique index, but it won't show on `SHOW CONTRAINTS` even it was created as a constraint. The workaround is to drop the index 
   and create the constraint again manually with the same name so `load` can skip it.
+* No support for full-text index.

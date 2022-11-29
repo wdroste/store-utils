@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
@@ -26,6 +27,7 @@ import org.neo4j.driver.Value;
 import org.neo4j.driver.summary.ResultSummary;
 import org.neo4j.internal.helpers.collection.Iterables;
 import org.neo4j.tool.VersionQuery.Neo4jVersion;
+import org.neo4j.tool.dto.ConstraintStatus;
 import org.neo4j.tool.dto.IndexData;
 import org.neo4j.tool.dto.IndexStatus;
 import org.neo4j.tool.dto.IndexStatus.State;
@@ -132,11 +134,29 @@ public class IndexManager {
             pct = (int) status.getProgress();
             progressPercentage(pct);
         }
+
+        // if this is a constraint make sure it shows up
+        if (!index.isUniqueness()) {}
+
+        // loop waiting for a bit for it to be created fail after 10 secs
+        for (int i = 0; i < 100; i++) {
+            try {
+                final var status = constraintCheck(index.getName());
+                if (status.isOnline()) {
+                    return;
+                }
+                TimeUnit.MILLISECONDS.sleep(100);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        final var ERROR_FMT = "Constraint '%s' failed to come online, please create manually.";
+        throw new IllegalStateException(String.format(ERROR_FMT, index.getName()));
     }
 
     void writeTransaction(final String query) {
         // query for all the indexes
-        try (Session session = driver.session()) {
+        try (final Session session = driver.session()) {
             assert session != null;
             ResultSummary resultSummary = session.writeTransaction(tx -> tx.run(query).consume());
             if (log.isDebugEnabled()) {
@@ -196,6 +216,21 @@ public class IndexManager {
         }
     }
 
+    ConstraintStatus constraintCheck(String name) {
+        // query for all the indexes
+        try (final Session session = driver.session()) {
+            assert session != null;
+            return session.readTransaction(tx -> toConstraintStatus(tx, name));
+        }
+    }
+
+    ConstraintStatus toConstraintStatus(Transaction tx, String name) {
+        final String FMT = "show constraints yield name WHERE name = \"%s\"";
+        final var result = tx.run(String.format(FMT, name));
+        final var record = Iterables.firstOrNull(result.list());
+        return ConstraintStatus.of(null != record);
+    }
+
     IndexStatus toIndexState(Transaction tx, String name) {
         final String FMT = "show indexes yield populationPercent,state,name WHERE name = \"%s\"";
         final var result = tx.run(String.format(FMT, name));
@@ -209,9 +244,15 @@ public class IndexManager {
     }
 
     IndexStatus.State toState(String state) {
-        if (state.equalsIgnoreCase("FAILED")) return State.FAILED;
-        if (state.equalsIgnoreCase("ONLINE")) return State.ONLINE;
-        if (state.equalsIgnoreCase("POPULATING")) return State.POPULATING;
+        if (state.equalsIgnoreCase("FAILED")) {
+            return State.FAILED;
+        }
+        if (state.equalsIgnoreCase("ONLINE")) {
+            return State.ONLINE;
+        }
+        if (state.equalsIgnoreCase("POPULATING")) {
+            return State.POPULATING;
+        }
         return State.OTHER;
     }
 
@@ -228,7 +269,7 @@ public class IndexManager {
     }
 
     /** Read all the index and constraints in order, of constrains first. */
-    List<IndexData> readIndexes() {
+    List<IndexData> readDBIndexes() {
         try (Session session = driver.session()) {
             assert session != null;
             return session.readTransaction(
@@ -260,7 +301,7 @@ public class IndexManager {
     }
 
     Set<String> readIndexNames() {
-        return readIndexes().stream().map(IndexData::getName).collect(toUnmodifiableSet());
+        return readDBIndexes().stream().map(IndexData::getName).collect(toUnmodifiableSet());
     }
 
     void buildIndexOrConstraint(Neo4jVersion version, IndexData index, boolean recreate) {

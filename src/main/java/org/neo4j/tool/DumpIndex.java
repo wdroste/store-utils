@@ -60,7 +60,7 @@ public class DumpIndex extends AbstractIndexCommand {
     @Override
     void execute(final IndexManager indexManager) {
         // query for all the indexes
-        final List<IndexData> indexes = indexManager.readIndexes();
+        final List<IndexData> indexes = indexManager.readDBIndexes();
         println("Building index file: %s", this.file);
         final List<IndexData> writeIndexes =
                 (lucene == null || lucene.isEmpty()) ? indexes : luceneIndex(indexes);
