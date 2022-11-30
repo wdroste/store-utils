@@ -17,12 +17,9 @@ package org.neo4j.tool.copy;
 
 import static java.lang.System.currentTimeMillis;
 import static org.neo4j.tool.util.Flusher.newFlusher;
-import static org.neo4j.tool.util.Neo4jHelper.percent;
-import static org.neo4j.tool.util.Print.printf;
 import static org.neo4j.tool.util.Print.println;
+import static org.neo4j.tool.util.Print.progressPercentage;
 
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.LongConsumer;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
@@ -37,6 +34,7 @@ import org.neo4j.internal.helpers.collection.Iterables;
 import org.neo4j.kernel.impl.store.InvalidRecordException;
 import org.neo4j.tool.util.Flusher;
 
+/** NOTE: {@link BatchInserter} is not thread safe. */
 @Slf4j
 @AllArgsConstructor
 public class NodeCopyJob {
@@ -64,40 +62,49 @@ public class NodeCopyJob {
         // stats
         private final long bound = highestNodeId + 1;
         private final long start = currentTimeMillis();
-        private final AtomicLong notFound = new AtomicLong();
-        private final AtomicLong removed = new AtomicLong();
+
         private final Flusher flusher = newFlusher(sourceDb);
 
-        public LongLongMap process() {
-            final var copiedNodes = new LongLongHashMap(10_000_000);
-            final LongConsumer consumer =
-                    sourceNodeId -> {
-                        try {
-                            if (!sourceDb.nodeExists(sourceNodeId)) {
-                                notFound.incrementAndGet();
-                            } else {
-                                final long targetNodeId = copyNode(sourceNodeId);
-                                if (targetNodeId > 0) {
-                                    synchronized (this) {
-                                        copiedNodes.put(sourceNodeId, targetNodeId);
-                                    }
-                                }
-                            }
-                        } catch (Exception e) {
-                            handleFailure(e, sourceNodeId);
-                        }
-                        // count is node index + 1 as its zero based
-                        long count = sourceNodeId + 1;
-                        printStats(count);
+        private final LongLongHashMap copiedNodes = new LongLongHashMap(10_000_000);
 
-                        // flush content for memory usage
-                        if (count % 20_000 == 0) {
-                            flusher.flush();
-                        }
-                    };
-            LongStream.range(0, bound).forEach(consumer);
+        private long count = 0L;
+        private long notFound = 0L;
+        private long removed = 0L;
+        private long progress = System.currentTimeMillis();
+
+        public LongLongMap process() {
+            // run the task
+            LongStream.range(0, bound).forEach(this::processNode);
+            // print the final percentage
+            progressPercentage(count, bound);
+            // print the final stats
             printFinalStats(copiedNodes.size());
             return copiedNodes;
+        }
+
+        void processNode(long sourceNodeId) {
+            try {
+                if (!sourceDb.nodeExists(sourceNodeId)) {
+                    notFound++;
+                } else {
+                    final long targetNodeId = copyNode(sourceNodeId);
+                    if (targetNodeId > 0) {
+                        copiedNodes.put(sourceNodeId, targetNodeId);
+                    }
+                }
+            } catch (Exception e) {
+                handleFailure(e, sourceNodeId);
+            }
+            // flush content for memory usage
+            if (++count % 20_000 == 0) {
+                flusher.flush();
+            }
+            // check if it's been a second since last checked
+            long now = System.currentTimeMillis();
+            if ((now - progress) > 1000) {
+                progress = now;
+                progressPercentage(count, bound);
+            }
         }
 
         long copyNode(long sourceNodeId) {
@@ -114,29 +121,17 @@ public class NodeCopyJob {
                 return targetDb.createNode(properties, nodeLabels);
             }
             // failed acceptance criteria filter
-            removed.incrementAndGet();
+            removed++;
             return -1L;
         }
 
         private void handleFailure(Exception e, long sourceNodeId) {
             if (e instanceof InvalidRecordException && e.getMessage().endsWith("not in use")) {
-                notFound.incrementAndGet();
+                notFound++;
             } else {
                 final var FMT = "Failed to process, node ID: {} Message: {}";
                 log.error(FMT, sourceNodeId, e.getMessage());
-                removed.incrementAndGet();
-            }
-        }
-
-        private synchronized void printStats(long count) {
-            if (count % 10_000 == 0) {
-                printf(".");
-            }
-            if (count % 500_000 == 0) {
-                int pct = percent(count, bound);
-                println(
-                        " %d / %d (%d%%) unused %d removed %d",
-                        count, bound, pct, notFound.get(), removed.get());
+                removed++;
             }
         }
 
@@ -154,8 +149,8 @@ public class NodeCopyJob {
                     highestNodeId,
                     time,
                     highestNodeId / time,
-                    notFound.get(),
-                    removed.get(),
+                    notFound,
+                    removed,
                     total);
         }
     }

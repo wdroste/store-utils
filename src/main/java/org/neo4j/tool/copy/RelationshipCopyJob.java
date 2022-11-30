@@ -18,13 +18,13 @@ package org.neo4j.tool.copy;
 import static org.neo4j.tool.util.Flusher.newFlusher;
 import static org.neo4j.tool.util.Neo4jHelper.percent;
 import static org.neo4j.tool.util.Print.printf;
+import static org.neo4j.tool.util.Print.progressPercentage;
 
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.collections.api.map.primitive.LongLongMap;
 import org.neo4j.batchinsert.BatchInserter;
 import org.neo4j.batchinsert.internal.BatchRelationship;
-import org.neo4j.graphdb.RelationshipType;
 import org.neo4j.kernel.impl.store.InvalidRecordException;
 import org.neo4j.tool.util.Flusher;
 
@@ -42,6 +42,7 @@ public class RelationshipCopyJob {
         long notFound = 0;
         long removed = 0;
 
+        long progress = System.currentTimeMillis();
         final Flusher flusher = newFlusher(sourceDb);
         while (relId <= highestRelationshipId) {
             try {
@@ -60,20 +61,19 @@ public class RelationshipCopyJob {
                 }
             }
             // increment here for counts, its still needed above
-            if (++relId % 10000 == 0) {
+            long count = ++relId;
+            if (count % 10000 == 0) {
                 flusher.flush();
-                printf(".");
             }
-            if (relId % 500000 == 0) {
-                printf(
-                        " %d / %d (%d%%) unused %d removed %d%n",
-                        relId,
-                        highestRelationshipId,
-                        percent(relId, highestRelationshipId),
-                        notFound,
-                        removed);
+
+            // check if it's been a second since last checked
+            long now = System.currentTimeMillis();
+            if ((now - progress) > 1000) {
+                progress = now;
+                progressPercentage(count, highestRelationshipId);
             }
         }
+        progressPercentage(relId, highestRelationshipId);
         time = Math.max(1, (System.currentTimeMillis() - time) / 1000);
         final var msg =
                 "%nCopying of %d relationship records took %d seconds (%d rec/s). Unused Records %d (%d%%) Removed Records %d (%d%%)%n";
@@ -92,9 +92,8 @@ public class RelationshipCopyJob {
         try {
             final long startNodeId = copiedNodeIds.get(rel.getStartNode());
             final long endNodeId = copiedNodeIds.get(rel.getEndNode());
-            final RelationshipType type = rel.getType();
             final var props = sourceDb.getRelationshipProperties(rel.getId());
-            targetDb.createRelationship(startNodeId, endNodeId, type, props);
+            targetDb.createRelationship(startNodeId, endNodeId, rel.getType(), props);
             return true;
         } catch (Exception e) {
             log.error("Failed to create relationship.", e);

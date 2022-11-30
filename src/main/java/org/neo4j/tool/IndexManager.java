@@ -3,6 +3,7 @@ package org.neo4j.tool;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toUnmodifiableSet;
 import static org.neo4j.tool.util.Print.println;
+import static org.neo4j.tool.util.Print.progressPercentage;
 
 import com.google.gson.GsonBuilder;
 import java.io.BufferedReader;
@@ -55,22 +56,6 @@ public class IndexManager {
 
     static List<String> toList(Value value) {
         return (null == value || value.isNull()) ? List.of() : value.asList(Value::asString);
-    }
-
-    static void progressPercentage(int remain) {
-        if (remain > 100) {
-            throw new IllegalArgumentException();
-        }
-        int maxBareSize = 100; // 100 unit for 100%
-        char defaultChar = '-';
-        String icon = "*";
-        String bare = new String(new char[maxBareSize]).replace('\0', defaultChar) + "]";
-        String bareDone = "[" + icon.repeat(Math.max(0, remain));
-        String bareRemain = bare.substring(remain);
-        System.out.print("\r" + bareDone + bareRemain + " " + remain + "%");
-        if (remain == 100) {
-            System.out.print("\n");
-        }
     }
 
     List<IndexData> readIndexesFromFile(File f) {

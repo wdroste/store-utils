@@ -17,6 +17,7 @@ package org.neo4j.tool;
 
 import static org.neo4j.configuration.GraphDatabaseSettings.allow_upgrade;
 import static org.neo4j.configuration.GraphDatabaseSettings.data_directory;
+import static org.neo4j.configuration.GraphDatabaseSettings.index_background_sampling_enabled;
 import static org.neo4j.configuration.GraphDatabaseSettings.pagecache_buffered_flush_enabled;
 import static org.neo4j.configuration.GraphDatabaseSettings.pagecache_direct_io;
 import static org.neo4j.configuration.GraphDatabaseSettings.pagecache_memory;
@@ -115,9 +116,7 @@ public class StoreCopy implements Runnable {
                 sourceCfgBld.fromFile(sourceConfigurationFile.toPath());
             } else {
                 sourceCfgBld.set(pagecache_memory, "4G");
-                sourceCfgBld.set(allow_upgrade, false);
-                sourceCfgBld.set(pagecache_direct_io, true);
-                sourceCfgBld.set(pagecache_buffered_flush_enabled, true);
+                sourceCfgBld.set(allow_upgrade, true);
                 sourceCfgBld.set(read_only_databases, Set.of(databaseName));
             }
             sourceCfgBld.set(data_directory, sourceDataDirectory.toPath());

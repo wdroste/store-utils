@@ -64,7 +64,9 @@ public class Neo4jHelper {
 
         final var managementServiceBld = new DatabaseManagementServiceBuilder(home);
         managementServiceBld.setConfig(data_directory, sourceDataDirectory.toPath());
-        println("Source Data Directory: %s", sourceDataDirectory);
+        println(
+                "Opening Source Neo4j Database (this can take considerable time): %s",
+                sourceDataDirectory);
 
         final var managementService = managementServiceBld.build();
         final var graphDb = managementService.database(databaseName);
