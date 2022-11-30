@@ -95,7 +95,7 @@ public class NodeCopyJob {
                             flusher.flush();
                         }
                     };
-            LongStream.range(0, bound).parallel().forEach(consumer);
+            LongStream.range(0, bound).forEach(consumer);
             printFinalStats(copiedNodes.size());
             return copiedNodes;
         }

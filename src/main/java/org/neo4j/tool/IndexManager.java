@@ -135,8 +135,10 @@ public class IndexManager {
             progressPercentage(pct);
         }
 
-        // if this is a constraint make sure it shows up
-        if (!index.isUniqueness()) {}
+        // index creation is finished
+        if (!index.isUniqueness()) {
+            return;
+        }
 
         // loop waiting for a bit for it to be created fail after 10 secs
         for (int i = 0; i < 100; i++) {
