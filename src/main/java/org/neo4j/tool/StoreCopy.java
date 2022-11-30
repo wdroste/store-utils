@@ -17,9 +17,6 @@ package org.neo4j.tool;
 
 import static org.neo4j.configuration.GraphDatabaseSettings.allow_upgrade;
 import static org.neo4j.configuration.GraphDatabaseSettings.data_directory;
-import static org.neo4j.configuration.GraphDatabaseSettings.index_background_sampling_enabled;
-import static org.neo4j.configuration.GraphDatabaseSettings.pagecache_buffered_flush_enabled;
-import static org.neo4j.configuration.GraphDatabaseSettings.pagecache_direct_io;
 import static org.neo4j.configuration.GraphDatabaseSettings.pagecache_memory;
 import static org.neo4j.configuration.GraphDatabaseSettings.read_only_databases;
 import static org.neo4j.configuration.GraphDatabaseSettings.writable_databases;
