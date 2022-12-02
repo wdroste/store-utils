@@ -66,4 +66,31 @@ public class PredicateBuilderTest {
             throw new RuntimeException(e);
         }
     }
+
+    @Test
+    public void testLabelsScript2() {
+        try (PredicateBuilder builder = new PredicateBuilder()) {
+            var p = builder.newInstance("!node.labels.contains('x')");
+            Assert.assertFalse(p.test(new NodeObject(List.of("x", "y", "z"), Map.of())));
+            Assert.assertTrue(p.test(new NodeObject(List.of("y", "z"), Map.of())));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    final String TEST_PROPERTIES =
+            "(node.labels.contains('x') && node.containsProperty('timestamp')) ? (node.timestamp > 10) : true";
+
+    @Test
+    public void testFilterProperties() {
+        try (PredicateBuilder builder = new PredicateBuilder()) {
+            var p = builder.newInstance(TEST_PROPERTIES);
+            Assert.assertFalse(
+                    p.test(new NodeObject(List.of("x", "y", "z"), Map.of("timestamp", 5))));
+            Assert.assertTrue(p.test(new NodeObject(List.of("x", "y", "z"), Map.of())));
+            Assert.assertTrue(p.test(new NodeObject(List.of("y", "z"), Map.of())));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 }

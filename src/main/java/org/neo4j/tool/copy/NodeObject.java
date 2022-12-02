@@ -32,6 +32,16 @@ public class NodeObject extends GroovyObjectSupport {
     }
 
     /**
+     * Use this to test certain criteria without throwing exceptions.
+     *
+     * @param name property name
+     * @return true if there's a value else false.
+     */
+    public boolean containsProperty(String name) {
+        return this.properties.containsKey(name);
+    }
+
+    /**
      * Get the property from the node, dynamically.
      *
      * @param propertyName name of the node property
