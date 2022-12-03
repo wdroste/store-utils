@@ -30,7 +30,7 @@ public class BucketBuilder {
     }
 
     static Stream<Bucket> toBuckets(Bucket.Size size, List<IndexData> values) {
-        return Lists.partition(values, 100).stream().map(b -> toBucket(size, b));
+        return Lists.partition(values, toBatchSize(size)).stream().map(b -> toBucket(size, b));
     }
 
     static Bucket toBucket(Bucket.Size size, List<IndexData> values) {
@@ -38,13 +38,19 @@ public class BucketBuilder {
         return Bucket.builder().size(size).batch(batch).build();
     }
 
+    static int toBatchSize(Size size) {
+        switch (size) {
+            case SMALL:
+                return 200;
+            case MEDIUM:
+                return 50;
+            case LARGE:
+                return 1;
+        }
+        throw new IllegalArgumentException("Unsupported batch size: " + size);
+    }
+
     static Size toSize(long total) {
-        if (total < 1000) {
-            return Size.SMALL;
-        }
-        if (total < 100_000) {
-            return Size.MEDIUM;
-        }
-        return Size.LARGE;
+        return (total < 1_000) ? Size.SMALL : (total < 500_000) ? Size.MEDIUM : Size.LARGE;
     }
 }

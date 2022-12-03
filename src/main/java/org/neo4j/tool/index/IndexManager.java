@@ -116,11 +116,7 @@ public class IndexManager {
             if (null != status && status.getState().isOk()) {
                 return true;
             }
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
+            simpleWait(10);
         }
         return false;
     }
@@ -134,6 +130,7 @@ public class IndexManager {
     }
 
     void monitorCreation(final IndexData index) {
+        println("Monitoring: %s", index.getName());
         // wait for completion
         int pct = 0;
         while (pct < 100) {
@@ -145,7 +142,7 @@ public class IndexManager {
             }
             pct = (int) status.getProgress();
             progressPercentage(pct);
-            simpleWait(500);
+            simpleWait(100);
         }
 
         // index creation is finished
