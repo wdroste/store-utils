@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import org.apache.commons.lang3.StringUtils;
 import org.neo4j.tool.dto.IndexData;
+import org.neo4j.tool.index.IndexManager;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -71,8 +72,7 @@ public class RebuildIndex extends AbstractIndexCommand {
 
             // save resume file
             Files.writeString(file.toPath(), index.getName());
-            indexManager.dropIndex(index);
-            indexManager.createIndexWaitForCompletion(ver, index);
+            indexManager.createAndMonitor(ver, index, true);
         }
         println("Last index saved to %s", this.file);
     }

@@ -1,4 +1,19 @@
-package org.neo4j.tool;
+/*
+ * Copyright 2002 Brinqa, Inc. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.neo4j.tool.index;
 
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toUnmodifiableSet;
@@ -14,21 +29,29 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.neo4j.driver.AccessMode;
 import org.neo4j.driver.Driver;
 import org.neo4j.driver.Record;
+import org.neo4j.driver.Result;
 import org.neo4j.driver.Session;
+import org.neo4j.driver.SessionConfig;
 import org.neo4j.driver.Transaction;
+import org.neo4j.driver.TransactionWork;
 import org.neo4j.driver.Value;
 import org.neo4j.driver.summary.ResultSummary;
 import org.neo4j.internal.helpers.collection.Iterables;
+import org.neo4j.tool.VersionQuery;
 import org.neo4j.tool.VersionQuery.Neo4jVersion;
+import org.neo4j.tool.dto.Bucket;
 import org.neo4j.tool.dto.ConstraintStatus;
+import org.neo4j.tool.dto.IndexBatch;
 import org.neo4j.tool.dto.IndexData;
 import org.neo4j.tool.dto.IndexStatus;
 import org.neo4j.tool.dto.IndexStatus.State;
@@ -58,7 +81,7 @@ public class IndexManager {
         return (null == value || value.isNull()) ? List.of() : value.asList(Value::asString);
     }
 
-    List<IndexData> readIndexesFromFile(File f) {
+    public List<IndexData> readIndexesFromFile(File f) {
         final var ret = new ArrayList<IndexData>();
         final var gson = new GsonBuilder().create();
         try (final var rdr = new BufferedReader(new FileReader(f))) {
@@ -81,6 +104,9 @@ public class IndexManager {
             log.error("Failed to create index: {}", query, th);
             throw new RuntimeException(th);
         }
+        if (!validIndex(index)) {
+            println("Failed to create index: %s", index.getName());
+        }
     }
 
     boolean validIndex(final IndexData index) {
@@ -99,14 +125,15 @@ public class IndexManager {
         return false;
     }
 
-    void createIndexWaitForCompletion(final Neo4jVersion version, final IndexData index) {
-        createIndex(version, index);
-
-        if (!validIndex(index)) {
-            println("Failed to create index: %s", index.getName());
-            return;
+    private void simpleWait(long milliseconds) {
+        try {
+            TimeUnit.MILLISECONDS.sleep(milliseconds);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
         }
+    }
 
+    void monitorCreation(final IndexData index) {
         // wait for completion
         int pct = 0;
         while (pct < 100) {
@@ -118,6 +145,7 @@ public class IndexManager {
             }
             pct = (int) status.getProgress();
             progressPercentage(pct);
+            simpleWait(500);
         }
 
         // index creation is finished
@@ -127,15 +155,11 @@ public class IndexManager {
 
         // loop waiting for a bit for it to be created fail after 10 secs
         for (int i = 0; i < 100; i++) {
-            try {
-                final var status = constraintCheck(index.getName());
-                if (status.isOnline()) {
-                    return;
-                }
-                TimeUnit.MILLISECONDS.sleep(100);
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
+            final var status = constraintCheck(index.getName());
+            if (status.isOnline()) {
+                return;
             }
+            simpleWait(100);
         }
         final var ERROR_FMT = "Constraint '%s' failed to come online, please create manually.";
         throw new IllegalStateException(String.format(ERROR_FMT, index.getName()));
@@ -149,6 +173,15 @@ public class IndexManager {
             if (log.isDebugEnabled()) {
                 log.debug(resultSummary.toString());
             }
+        }
+    }
+
+    <T> T readTransaction(TransactionWork<T> work) {
+        // query for all the indexes
+        final var cfg = SessionConfig.builder().withDefaultAccessMode(AccessMode.READ).build();
+        try (final Session session = driver.session(cfg)) {
+            assert session != null;
+            return session.readTransaction(work);
         }
     }
 
@@ -189,7 +222,7 @@ public class IndexManager {
         return String.format(format, name, label, firstProp);
     }
 
-    String indexOrConstraintQuery(Neo4jVersion version, IndexData indexData) {
+    public String indexOrConstraintQuery(Neo4jVersion version, IndexData indexData) {
         return indexData.isUniqueness()
                 ? constraintQuery(version, indexData)
                 : indexQuery(indexData);
@@ -243,7 +276,7 @@ public class IndexManager {
         return State.OTHER;
     }
 
-    void writeIndexes(List<IndexData> indexes, File file) {
+    public void writeIndexes(List<IndexData> indexes, File file) {
         final var gson = new GsonBuilder().create();
         try (final var wrt = new BufferedWriter(new FileWriter(file))) {
             for (IndexData index : indexes) {
@@ -256,7 +289,7 @@ public class IndexManager {
     }
 
     /** Read all the index and constraints in order, of constrains first. */
-    List<IndexData> readDBIndexes() {
+    public List<IndexData> readDBIndexes() {
         try (Session session = driver.session()) {
             assert session != null;
             return session.readTransaction(
@@ -275,7 +308,7 @@ public class IndexManager {
         return String.format(FMT, data.getName());
     }
 
-    void dropIndex(final IndexData indexData) {
+    public void dropIndex(final IndexData indexData) {
         // query for all the indexes
         final var query = dropQuery(indexData);
         println(query);
@@ -287,18 +320,51 @@ public class IndexManager {
         }
     }
 
-    Set<String> readIndexNames() {
+    public Set<String> readIndexNames() {
         return readDBIndexes().stream().map(IndexData::getName).collect(toUnmodifiableSet());
     }
 
-    void buildIndexOrConstraint(Neo4jVersion version, IndexData index, boolean recreate) {
+    public void createAndMonitor(Neo4jVersion version, IndexData index, boolean recreate) {
         if (recreate) {
             dropIndex(index);
         }
-        createIndexWaitForCompletion(version, index);
+        createIndex(version, index);
+        monitorCreation(index);
     }
 
-    Neo4jVersion determineVersion() {
+    public Neo4jVersion determineVersion() {
         return VersionQuery.determineVersion(driver);
+    }
+
+    public long labelSize(String labelName) {
+        final String FMT = "MATCH (n:`%s`) return count(n) as count";
+        return this.readTransaction(
+                tx -> {
+                    final Result result = tx.run(String.format(FMT, labelName));
+                    return Optional.ofNullable(Iterables.firstOrNull(result.list()))
+                            .map(r -> r.get(0).asLong(0L))
+                            .orElse(0L);
+                });
+    }
+
+    /** Create all the indexes in one transaction for the bucket. */
+    public void create(final Neo4jVersion version, final Bucket bucket) {
+        for (final IndexBatch batch : bucket.getBatches()) {
+            // send all the commands
+            try (final Session s = driver.session()) {
+                final Transaction tx = s.beginTransaction();
+                for (IndexData index : batch.getIndexes()) {
+                    final var q = indexOrConstraintQuery(version, index);
+                    println(q);
+                    tx.run(q);
+                }
+                tx.commit();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+
+            // monitor the indexes
+            batch.getIndexes().forEach(this::monitorCreation);
+        }
     }
 }

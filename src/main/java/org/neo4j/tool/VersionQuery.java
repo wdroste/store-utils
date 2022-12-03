@@ -22,7 +22,7 @@ import org.neo4j.driver.Transaction;
 /** Determine the version of Neo4j */
 public class VersionQuery {
 
-    enum Neo4jVersion {
+    public enum Neo4jVersion {
         v4_2,
         v4_3,
         v4_4

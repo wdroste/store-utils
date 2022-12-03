@@ -18,8 +18,14 @@ package org.neo4j.tool;
 import static org.neo4j.tool.util.Print.println;
 
 import java.io.File;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.Set;
+import java.util.stream.Collectors;
+import org.apache.commons.lang3.tuple.Pair;
+import org.neo4j.internal.helpers.collection.Iterables;
+import org.neo4j.tool.dto.Bucket;
 import org.neo4j.tool.dto.IndexData;
+import org.neo4j.tool.index.BucketBuilder;
+import org.neo4j.tool.index.IndexManager;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -36,6 +42,11 @@ import picocli.CommandLine.Option;
         description =
                 "Creates indexes and constraints based on the file provided, skips existing indexes and constraints by name.")
 public class LoadIndex extends AbstractIndexCommand {
+
+    @Option(
+            names = {"-d", "--dryrun"},
+            description = "Just print all the queries.")
+    protected boolean dryRun;
 
     @Option(
             required = true,
@@ -59,24 +70,56 @@ public class LoadIndex extends AbstractIndexCommand {
     @Override
     void execute(final IndexManager indexManager) {
         final var ver = indexManager.determineVersion();
-        final var indexNames = indexManager.readIndexNames();
         final var fileIndexes = indexManager.readIndexesFromFile(file);
-        final int total = fileIndexes.size();
-        final var count = new AtomicInteger();
-        for (IndexData indexData : fileIndexes) {
-            count.incrementAndGet();
-            println("Progress: %d/%d", count.get(), total);
-            if (indexData.getLabelsOrTypes().isEmpty()) {
-                println("Filtering as there's no Label: %s", indexData);
-                continue;
+
+        // just print all the queries
+        if (dryRun) {
+            for (IndexData x : fileIndexes) {
+                final String query = indexManager.indexOrConstraintQuery(ver, x);
+                println(query);
             }
-            // if recreate always drop and then create
-            if (!recreate && indexNames.contains(indexData.getName())) {
-                println("Index with name '%s' already exists, skipping.", indexData.getName());
-                continue;
-            }
-            // create index
-            indexManager.buildIndexOrConstraint(ver, indexData, recreate);
+            return;
         }
+
+        // buckets sizes <1k (100 per), <10k (10 per), <100k (2 per), >100k (1 per)
+        final var indexNames = indexManager.readIndexNames();
+
+        // filter through missing
+        final var missing =
+                fileIndexes.stream()
+                        .filter(indexData -> filterExisting(indexNames, indexData))
+                        .collect(Collectors.toList());
+
+        // find all the sizes
+        final var sizes =
+                missing.parallelStream()
+                        .filter(idx -> idx.getLabelsOrTypes().size() == 1)
+                        .map(idx -> determineSize(indexManager, idx))
+                        .collect(Collectors.toList());
+
+        // process each bucket
+        final var buckets = BucketBuilder.build(sizes);
+        for (Bucket bucket : buckets) {
+            indexManager.create(ver, bucket);
+        }
+    }
+
+    Pair<IndexData, Long> determineSize(IndexManager indexManager, IndexData idx) {
+        String label = Iterables.firstOrNull(idx.getLabelsOrTypes());
+        long size = indexManager.labelSize(label);
+        return Pair.of(idx, size);
+    }
+
+    boolean filterExisting(Set<String> indexNames, IndexData indexData) {
+        if (indexData.getLabelsOrTypes().isEmpty()) {
+            println("Filtering as there's no Label: %s", indexData);
+            return false;
+        }
+        // if recreate always drop and then create
+        if (!recreate && indexNames.contains(indexData.getName())) {
+            println("Index with name '%s' already exists, skipping.", indexData.getName());
+            return false;
+        }
+        return true;
     }
 }

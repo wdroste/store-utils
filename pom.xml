@@ -4,7 +4,7 @@
 
     <groupId>org.neo4j</groupId>
     <artifactId>store-utils</artifactId>
-    <version>4.4.15.1</version>
+    <version>4.4.15.4</version>
     <packaging>jar</packaging>
 
     <name>store-utils</name>
@@ -32,6 +32,11 @@
         </license>
     </licenses>
     <dependencies>
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>31.1-jre</version>
+        </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
@@ -108,6 +113,11 @@
             <groupId>com.fasterxml.jackson.jaxrs</groupId>
             <artifactId>jackson-jaxrs-json-provider</artifactId>
             <version>2.13.4</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vavr</groupId>
+            <artifactId>vavr</artifactId>
+            <version>0.10.4</version>
         </dependency>
         <dependency>
             <groupId>org.apache.groovy</groupId>
