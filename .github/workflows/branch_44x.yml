@@ -20,7 +20,7 @@ jobs:
         result-encoding: string
         script: |
           var branch = context.ref.split('/').pop()
-          return branch.replace('v','')
+          return branch.replace('v','').replace('.x','-SNAPSHOT')
 
     - name: Get Revision
       run: echo "Revision ${{steps.determine-revision.outputs.result}}"
