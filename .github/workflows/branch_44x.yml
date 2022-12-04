@@ -19,7 +19,7 @@ jobs:
         java-version: '11'
         distribution: 'temurin'
     - name: Build with Maven
-      run: ./mvnw -B verify --file pom.xml -Drevision=$(echo ${GITHUB_REF##*/} | sed /v//)
+      run: ./mvnw -B verify --file pom.xml -Drevision=${GITHUB_REF##*/}
 
     # Optional: Uploads the full dependency graph to GitHub to improve the quality of Dependabot alerts this repository can receive
     - name: Update dependency graph

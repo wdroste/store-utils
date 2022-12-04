@@ -2,12 +2,6 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <parent>
-        <groupId>org.apache</groupId>
-        <artifactId>apache</artifactId>
-        <version>18</version>
-    </parent>
-
     <groupId>org.neo4j</groupId>
     <artifactId>store-utils</artifactId>
     <version>${revision}</version>
@@ -16,7 +10,7 @@
     <name>store-utils</name>
 
     <properties>
-        <revision>4.4.15-dev</revision>
+        <revision>4.4.15.x-SNAPSHOT</revision>
         <neo4j.version>4.4.15</neo4j.version>
         <neo4j.driver.version>4.4.9</neo4j.driver.version>
 
