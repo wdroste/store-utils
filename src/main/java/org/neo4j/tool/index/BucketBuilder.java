@@ -45,12 +45,12 @@ public class BucketBuilder {
             case MEDIUM:
                 return 50;
             case LARGE:
-                return 1;
+                return 4;
         }
         throw new IllegalArgumentException("Unsupported batch size: " + size);
     }
 
     static Size toSize(long total) {
-        return (total < 1_000) ? Size.SMALL : (total < 500_000) ? Size.MEDIUM : Size.LARGE;
+        return (total < 50_000) ? Size.SMALL : (total < 1_000_000) ? Size.MEDIUM : Size.LARGE;
     }
 }

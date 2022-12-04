@@ -4,12 +4,13 @@
 
     <groupId>org.neo4j</groupId>
     <artifactId>store-utils</artifactId>
-    <version>4.4.15.4</version>
+    <version>${revision}</version>
     <packaging>jar</packaging>
 
     <name>store-utils</name>
 
     <properties>
+        <revision>4.4.15-dev</revision>
         <neo4j.version>4.4.15</neo4j.version>
         <neo4j.driver.version>4.4.9</neo4j.driver.version>
 
