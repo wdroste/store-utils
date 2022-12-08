@@ -11,15 +11,15 @@ import lombok.Singular;
 public class StoreCopyConfiguration {
 
     @Singular
-    @SerializedName("relationshipTypesToIgnore")
+    @SerializedName("deleteRelationshipsWithType")
     Set<String> ignoreRelTypes;
     @Singular
-    @SerializedName("propertiesToIgnore")
+    @SerializedName("filterPropertiesFromNode")
     Set<String> ignoreProperties;
     @Singular
-    @SerializedName("labelsToIgnore")
+    @SerializedName("filterLabelsFromNode")
     Set<String> ignoreLabels;
     @Singular
-    @SerializedName("labelsToDelete")
+    @SerializedName("deleteNodesWithLabel")
     Set<String> deleteNodesWithLabels;
 }

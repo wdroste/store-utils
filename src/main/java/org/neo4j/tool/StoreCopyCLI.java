@@ -2,17 +2,23 @@ package org.neo4j.tool;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
+import java.util.Set;
 
+import com.google.common.collect.ImmutableSet;
 import com.google.gson.GsonBuilder;
+import com.google.gson.annotations.SerializedName;
 
 import org.neo4j.io.fs.FileUtils;
 import org.neo4j.tool.dto.StoreCopyConfiguration;
 
+import lombok.Singular;
 import lombok.SneakyThrows;
 import lombok.val;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.MissingParameterException;
 import picocli.CommandLine.Parameters;
+import picocli.CommandLine.UnmatchedArgumentException;
 
 @Command(
     name = "storeCopy",
@@ -22,16 +28,41 @@ public class StoreCopyCLI implements Runnable {
 
     @Parameters(index = "0", description = "Source Neo4j data directory.")
     protected File source;
-
     @Parameters(index = "1", description = "Target Neo4j data directory.")
     protected File target;
-
     @Parameters(index = "2", description = "Configuration file in JSON format.")
     protected File configuration;
 
     public static void main(String[] args) throws Exception {
-        int exitCode = new CommandLine(new StoreCopyCLI()).execute(args);
-        System.exit(exitCode);
+        val commandLine = new CommandLine(new StoreCopyCLI());
+        try {
+            commandLine.parseArgs(args);
+            int exitCode = commandLine.execute(args);
+            System.exit(exitCode);
+        } catch (MissingParameterException | UnmatchedArgumentException ex) {
+            usage(commandLine);
+            System.err.println(ex.getMessage());
+        }
+    }
+
+    static void usage(CommandLine commandLine) {
+        commandLine.usage(System.out);
+
+
+        System.out.println("\nConfiguration Help: ");
+        System.out.println("  deleteRelationshipsWithType - delete relationships between nodes with the specified types.");
+        System.out.println("  filterPropertiesFromNode - remove properties from nodes with the specified names.");
+        System.out.println("  filterLabelsFromNode - remove labels from nodes with the specified names.");
+        System.out.println("  deleteNodesWithLabel - delete nodes that contain any of these labels.");
+
+        val cfg = new StoreCopyConfiguration();
+        cfg.setDeleteNodesWithLabels(ImmutableSet.of("DeleteWithLabel1"));
+        cfg.setIgnoreRelTypes(ImmutableSet.of("RelationshipTypeToDelete1"));
+        cfg.setIgnoreProperties(ImmutableSet.of("propertyNameToRemoveFromNode1"));
+        cfg.setIgnoreLabels(ImmutableSet.of("LabelToRemoveFromNode1"));
+        System.out.println("\nSample Configuration: ");
+        val gson = new GsonBuilder().setPrettyPrinting().create();
+        System.out.println(gson.toJson(cfg));
     }
 
     @Override
