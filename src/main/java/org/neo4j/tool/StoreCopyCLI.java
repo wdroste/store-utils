@@ -2,16 +2,13 @@ package org.neo4j.tool;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
-import java.util.Set;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.gson.GsonBuilder;
-import com.google.gson.annotations.SerializedName;
 
 import org.neo4j.io.fs.FileUtils;
 import org.neo4j.tool.dto.StoreCopyConfiguration;
 
-import lombok.Singular;
 import lombok.SneakyThrows;
 import lombok.val;
 import picocli.CommandLine;
