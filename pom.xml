@@ -144,7 +144,7 @@
                         </program>
                         <program>
                             <name>storeCopy</name>
-                            <mainClass>org.neo4j.tool.StoreCopy</mainClass>
+                            <mainClass>org.neo4j.tool.StoreCopyCLI</mainClass>
                         </program>
                         <program>
                             <name>storeUpdate</name>
