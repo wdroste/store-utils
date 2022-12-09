@@ -67,14 +67,8 @@ public class StoreCopy {
 
         logs = new PrintWriter(new FileWriter(new File(target, "store-copy.log")));
 
-        LongLongMap copiedNodeIds = copyNodes(sourceDb,
-                                              targetDb,
-                                              ignoreProperties,
-                                              ignoreLabels,
-                                              deleteNodesWithLabels,
-                                              highestIds.first(),
-                                              flusher);
-        copyRelationships(sourceDb, targetDb, ignoreRelTypes, ignoreProperties, copiedNodeIds, highestIds.other(), flusher);
+        LongLongMap copiedNodeIds = copyNodes(sourceDb, targetDb, highestIds.first(), flusher);
+        copyRelationships(sourceDb, targetDb, copiedNodeIds, highestIds.other(), flusher);
         System.out.println("Stopping target database");
         targetDb.shutdown();
         System.out.println("Stopped target database");
@@ -136,13 +130,11 @@ public class StoreCopy {
         return Pair.of(highestNodeId, highestRelId);
     }
 
-    private static void copyRelationships(BatchInserter sourceDb,
-                                          BatchInserter targetDb,
-                                          Set<String> ignoreRelTypes,
-                                          Set<String> ignoreProperties,
-                                          LongLongMap copiedNodeIds,
-                                          long highestRelId,
-                                          Flusher flusher) {
+    private void copyRelationships(BatchInserter sourceDb,
+                                   BatchInserter targetDb,
+                                   LongLongMap copiedNodeIds,
+                                   long highestRelId,
+                                   Flusher flusher) {
         long time = System.currentTimeMillis();
         long relId = 0;
         long notFound = 0;
@@ -235,13 +227,10 @@ public class StoreCopy {
         }
     }
 
-    private static LongLongMap copyNodes(BatchInserter sourceDb,
-                                         BatchInserter targetDb,
-                                         Set<String> ignoreProperties,
-                                         Set<String> ignoreLabels,
-                                         Set<String> deleteNodesWithLabels,
-                                         long highestNodeId,
-                                         Flusher flusher) {
+    private LongLongMap copyNodes(BatchInserter sourceDb,
+                                  BatchInserter targetDb,
+                                  long highestNodeId,
+                                  Flusher flusher) {
         MutableLongLongMap copiedNodes = new LongLongHashMap(10_000_000);
         long time = System.currentTimeMillis();
         long node = 0;
