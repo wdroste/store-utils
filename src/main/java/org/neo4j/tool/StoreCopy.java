@@ -3,15 +3,11 @@ package org.neo4j.tool;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.PrintWriter;
-import java.lang.reflect.Field;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
 import org.neo4j.graphdb.Label;
-import org.neo4j.graphdb.PropertyContainer;
 import org.neo4j.graphdb.RelationshipType;
 import org.neo4j.graphdb.factory.GraphDatabaseFactory;
 import org.neo4j.helpers.Exceptions;
@@ -21,18 +17,20 @@ import org.neo4j.helpers.collection.Pair;
 import org.neo4j.kernel.impl.store.id.IdGeneratorFactory;
 import org.neo4j.kernel.impl.store.id.IdType;
 import org.neo4j.kernel.internal.GraphDatabaseAPI;
+import org.neo4j.tool.StoreCopyUtil.Flusher;
+import org.neo4j.tool.dto.StoreCopyConfiguration;
 import org.neo4j.unsafe.batchinsert.BatchInserter;
 import org.neo4j.unsafe.batchinsert.BatchInserters;
 import org.neo4j.unsafe.batchinsert.BatchRelationship;
-import org.neo4j.unsafe.batchinsert.internal.BatchInserterImpl;
-import org.neo4j.unsafe.batchinsert.internal.DirectRecordAccess;
-import org.neo4j.unsafe.batchinsert.internal.DirectRecordAccessSet;
-import org.neo4j.unsafe.batchinsert.internal.FileSystemClosingBatchInserter;
 
 import lombok.RequiredArgsConstructor;
 import org.eclipse.collections.api.map.primitive.LongLongMap;
 import org.eclipse.collections.api.map.primitive.MutableLongLongMap;
 import org.eclipse.collections.impl.map.mutable.primitive.LongLongHashMap;
+
+import static org.neo4j.tool.StoreCopyUtil.buildFlusher;
+import static org.neo4j.tool.StoreCopyUtil.labelInSet;
+import static org.neo4j.tool.StoreCopyUtil.toArray;
 
 @RequiredArgsConstructor
 public class StoreCopy {
@@ -40,33 +38,26 @@ public class StoreCopy {
     private final File source;
     private final File target;
 
-    private final Set<String> ignoreRelTypes;
-    private final Set<String> ignoreProperties;
-    private final Set<String> ignoreLabels;
-    private final Set<String> deleteNodesWithLabels;
+    private final StoreCopyConfiguration configuration;
 
-    private static final Label[] NO_LABELS = new Label[0];
-    private static PrintWriter logs;
-
-    interface Flusher {
-
-        void flush();
-    }
+    private PrintWriter logs;
 
     public void run() throws Exception {
-        Pair<Long, Long> highestIds = getHighestNodeId(source);
-        String pageCacheSize = System.getProperty("dbms.pagecache.memory", "2G");
-        Map<String, String> targetConfig = MapUtil.stringMap("dbms.pagecache.memory", pageCacheSize);
-        BatchInserter targetDb = BatchInserters.inserter(target, targetConfig);
-        Map<String, String> sourceConfig = MapUtil.stringMap("dbms.pagecache.memory",
-                                                             System.getProperty("dbms.pagecache.memory.source", pageCacheSize),
-                                                             "dbms.read_only",
-                                                             "true");
-        BatchInserter sourceDb = BatchInserters.inserter(source, sourceConfig);
-        Flusher flusher = getFlusher(sourceDb);
+        final Pair<Long, Long> highestIds = getHighestNodeId(source);
+        if (highestIds.first() < 0) {
+            throw new IllegalArgumentException("Invalid source directory " + source);
+        }
+        final String pageCacheSize = System.getProperty("dbms.pagecache.memory", "2G");
+        final BatchInserter sourceDb = BatchInserters.inserter(source, Collections.emptyMap());
+        final Flusher flusher = buildFlusher(sourceDb);
 
+        if (!target.mkdirs()) {
+            throw new IllegalArgumentException("Unable to create directory for target copy - " + target.getAbsolutePath());
+        }
         logs = new PrintWriter(new FileWriter(new File(target, "store-copy.log")));
 
+        final Map<String, String> targetConfig = MapUtil.stringMap("dbms.pagecache.memory", pageCacheSize);
+        BatchInserter targetDb = BatchInserters.inserter(target, targetConfig);
         LongLongMap copiedNodeIds = copyNodes(sourceDb, targetDb, highestIds.first(), flusher);
         copyRelationships(sourceDb, targetDb, copiedNodeIds, highestIds.other(), flusher);
         System.out.println("Stopping target database");
@@ -83,38 +74,11 @@ public class StoreCopy {
         logs.close();
     }
 
-    private static Flusher getFlusher(BatchInserter db) {
-        try {
-            Field delegate = FileSystemClosingBatchInserter.class.getDeclaredField("delegate");
-            delegate.setAccessible(true);
-            db = (BatchInserter) delegate.get(db);
-            Field field = BatchInserterImpl.class.getDeclaredField("recordAccess");
-            field.setAccessible(true);
-            final DirectRecordAccessSet recordAccessSet = (DirectRecordAccessSet) field.get(db);
-            final Field cacheField = DirectRecordAccess.class.getDeclaredField("batch");
-            cacheField.setAccessible(true);
-            return new Flusher() {
-                @Override
-                public void flush() {
-                    try {
-                        ((Map) cacheField.get(recordAccessSet.getNodeRecords())).clear();
-                        ((Map) cacheField.get(recordAccessSet.getRelRecords())).clear();
-                        ((Map) cacheField.get(recordAccessSet.getPropertyRecords())).clear();
-                    }
-                    catch (IllegalAccessException e) {
-                        throw new RuntimeException("Error clearing cache " + cacheField, e);
-                    }
-                }
-            };
-        }
-        catch (IllegalAccessException | NoSuchFieldException e) {
-            throw new RuntimeException("Error accessing cache field ", e);
-        }
-    }
 
     private static GraphDatabaseFactory factory() {
         try {
-            return (GraphDatabaseFactory) Class.forName("org.neo4j.graphdb.factory.EnterpriseGraphDatabaseFactory").newInstance();
+            final String className = "org.neo4j.graphdb.factory.EnterpriseGraphDatabaseFactory";
+            return (GraphDatabaseFactory) Class.forName(className).newInstance();
         }
         catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
             return new GraphDatabaseFactory();
@@ -123,18 +87,18 @@ public class StoreCopy {
 
     private static Pair<Long, Long> getHighestNodeId(File source) {
         GraphDatabaseAPI api = (GraphDatabaseAPI) factory().newEmbeddedDatabase(source);
-        IdGeneratorFactory idGenerators = api.getDependencyResolver().resolveDependency(IdGeneratorFactory.class);
+        IdGeneratorFactory idGenerators = api.getDependencyResolver().provideDependency(IdGeneratorFactory.class).get();
         long highestNodeId = idGenerators.get(IdType.NODE).getHighestPossibleIdInUse();
         long highestRelId = idGenerators.get(IdType.RELATIONSHIP).getHighestPossibleIdInUse();
         api.shutdown();
         return Pair.of(highestNodeId, highestRelId);
     }
 
-    private void copyRelationships(BatchInserter sourceDb,
-                                   BatchInserter targetDb,
-                                   LongLongMap copiedNodeIds,
-                                   long highestRelId,
-                                   Flusher flusher) {
+    private void copyRelationships(final BatchInserter sourceDb,
+                                   final BatchInserter targetDb,
+                                   final LongLongMap copiedNodeIds,
+                                   final long highestRelId,
+                                   final Flusher flusher) {
         long time = System.currentTimeMillis();
         long relId = 0;
         long notFound = 0;
@@ -145,12 +109,7 @@ public class StoreCopy {
             try {
                 rel = sourceDb.getRelationshipById(relId++);
                 type = rel.getType().name();
-                if (!ignoreRelTypes.contains(type)) {
-                    if (!createRelationship(targetDb, sourceDb, rel, ignoreProperties, copiedNodeIds)) {
-                        removed++;
-                    }
-                }
-                else {
+                if (!createRelationship(targetDb, sourceDb, rel, copiedNodeIds)) {
                     removed++;
                 }
             }
@@ -180,53 +139,6 @@ public class StoreCopy {
         return (int) (100 * part.floatValue() / total.floatValue());
     }
 
-    private static long firstNode(BatchInserter sourceDb, long highestNodeId) {
-        long node = -1;
-        while (++node <= highestNodeId) {
-            if (sourceDb.nodeExists(node) && !sourceDb.getNodeProperties(node).isEmpty()) {
-                return node;
-            }
-        }
-        return -1;
-    }
-
-    private static void flushCache(BatchInserter sourceDb, long node) {
-        Map<String, Object> nodeProperties = sourceDb.getNodeProperties(node);
-        Iterator<Map.Entry<String, Object>> iterator = nodeProperties.entrySet().iterator();
-        if (iterator.hasNext()) {
-            Map.Entry<String, Object> firstProp = iterator.next();
-            sourceDb.nodeHasProperty(node, firstProp.getKey());
-            sourceDb.setNodeProperty(node, firstProp.getKey(), firstProp.getValue()); // force flush
-            System.out.print(" flush");
-        }
-    }
-
-    private static boolean createRelationship(BatchInserter targetDb,
-                                              BatchInserter sourceDb,
-                                              BatchRelationship rel,
-                                              Set<String> ignoreProperties,
-                                              LongLongMap copiedNodeIds) {
-        long startNodeId = rel.getStartNode(), endNodeId = rel.getEndNode();
-        if (copiedNodeIds != null) {
-            startNodeId = copiedNodeIds.get(startNodeId);
-            endNodeId = copiedNodeIds.get(endNodeId);
-        }
-        if (startNodeId == -1L || endNodeId == -1L) {
-            return false;
-        }
-        final RelationshipType type = rel.getType();
-        try {
-            Map<String, Object> props = getProperties(sourceDb.getRelationshipProperties(rel.getId()), ignoreProperties);
-//            if (props.isEmpty()) props = Collections.<String,Object>singletonMap("old_id",rel.getId()); else props.put("old_id",rel.getId());
-            targetDb.createRelationship(startNodeId, endNodeId, type, props);
-            return true;
-        }
-        catch (Exception e) {
-            addLog(rel, "create Relationship: " + startNodeId + "-[:" + type + "]" + "->" + endNodeId, e.getMessage());
-            return false;
-        }
-    }
-
     private LongLongMap copyNodes(BatchInserter sourceDb,
                                   BatchInserter targetDb,
                                   long highestNodeId,
@@ -239,12 +151,12 @@ public class StoreCopy {
         while (node <= highestNodeId) {
             try {
                 if (sourceDb.nodeExists(node)) {
-                    if (labelInSet(sourceDb.getNodeLabels(node), deleteNodesWithLabels)) {
+                    final Set<Label> nodeLabels = Iterables.asSet(sourceDb.getNodeLabels(node));
+                    if (labelInSet(nodeLabels, configuration.getDeleteNodesWithLabels())) {
                         removed++;
                     }
                     else {
-                        long newNodeId = targetDb.createNode(getProperties(sourceDb.getNodeProperties(node), ignoreProperties),
-                                                             labelsArray(sourceDb, node, ignoreLabels));
+                        long newNodeId = targetDb.createNode(sourceDb.getNodeProperties(node), toArray(nodeLabels));
                         copiedNodes.put(node, newNodeId);
                     }
                 }
@@ -276,48 +188,35 @@ public class StoreCopy {
         return copiedNodes;
     }
 
-    private static boolean labelInSet(Iterable<Label> nodeLabels, Set<String> labelSet) {
-        if (labelSet == null || labelSet.isEmpty()) {
+    private boolean createRelationship(BatchInserter targetDb,
+                                       BatchInserter sourceDb,
+                                       BatchRelationship rel,
+                                       LongLongMap copiedNodeIds) {
+        long startNodeId = rel.getStartNode(), endNodeId = rel.getEndNode();
+        if (copiedNodeIds != null) {
+            startNodeId = copiedNodeIds.get(startNodeId);
+            endNodeId = copiedNodeIds.get(endNodeId);
+        }
+        if (startNodeId == -1L || endNodeId == -1L) {
             return false;
         }
-        for (Label nodeLabel : nodeLabels) {
-            if (labelSet.contains(nodeLabel.name())) {
-                return true;
-            }
+        final RelationshipType type = rel.getType();
+        try {
+            Map<String, Object> props = sourceDb.getRelationshipProperties(rel.getId());
+            targetDb.createRelationship(startNodeId, endNodeId, type, props);
+            return true;
         }
-        return false;
+        catch (Exception e) {
+            addLog(rel, "create Relationship: " + startNodeId + "-[:" + type + "]" + "->" + endNodeId, e.getMessage());
+            return false;
+        }
     }
 
-    private static Label[] labelsArray(BatchInserter db, long node, Set<String> ignoreLabels) {
-        Collection<Label> labels = Iterables.asCollection(db.getNodeLabels(node));
-        if (labels.isEmpty()) {
-            return NO_LABELS;
-        }
-        if (!ignoreLabels.isEmpty()) {
-            labels.removeIf(label -> ignoreLabels.contains(label.name()));
-        }
-        return labels.toArray(new Label[0]);
-    }
-
-    private static Map<String, Object> getProperties(Map<String, Object> pc, Set<String> ignoreProperties) {
-        if (pc.isEmpty()) {
-            return Collections.emptyMap();
-        }
-        if (!ignoreProperties.isEmpty()) {
-            pc.keySet().removeAll(ignoreProperties);
-        }
-        return pc;
-    }
-
-    private static void addLog(BatchRelationship rel, String property, String message) {
+    private void addLog(BatchRelationship rel, String property, String message) {
         logs.append(String.format("%s.%s %s%n", rel, property, message));
     }
 
-    private static void addLog(long node, String message) {
+    private void addLog(long node, String message) {
         logs.append(String.format("Node: %s %s%n", node, message));
-    }
-
-    private static void addLog(PropertyContainer pc, String property, String message) {
-        logs.append(String.format("%s.%s %s%n", pc, property, message));
     }
 }

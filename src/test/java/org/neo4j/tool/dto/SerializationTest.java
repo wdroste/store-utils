@@ -12,7 +12,6 @@ public class SerializationTest {
     @Test
     public void testSerialization() {
         val cfg = new StoreCopyConfiguration();
-        cfg.setIgnoreLabels(ImmutableSet.of("IgnoreLabel1", "IgnoreLabel2"));
         cfg.setDeleteNodesWithLabels(ImmutableSet.of("DeleteLabel1", "DeleteLabel2"));
 
         val gson = new GsonBuilder().setPrettyPrinting().create();
