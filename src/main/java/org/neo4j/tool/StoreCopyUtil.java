@@ -4,7 +4,6 @@ import java.lang.reflect.Field;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
-
 import org.neo4j.graphdb.Label;
 import org.neo4j.helpers.collection.Iterables;
 import org.neo4j.unsafe.batchinsert.BatchInserter;
@@ -13,9 +12,7 @@ import org.neo4j.unsafe.batchinsert.internal.DirectRecordAccess;
 import org.neo4j.unsafe.batchinsert.internal.DirectRecordAccessSet;
 import org.neo4j.unsafe.batchinsert.internal.FileSystemClosingBatchInserter;
 
-/**
- * Static methods from StoreUtil.
- */
+/** Static methods from StoreUtil. */
 public class StoreCopyUtil {
 
     private static final Label[] NO_LABELS = new Label[0];
@@ -62,14 +59,12 @@ public class StoreCopyUtil {
                         ((Map) cacheField.get(recordAccessSet.getNodeRecords())).clear();
                         ((Map) cacheField.get(recordAccessSet.getRelRecords())).clear();
                         ((Map) cacheField.get(recordAccessSet.getPropertyRecords())).clear();
-                    }
-                    catch (IllegalAccessException e) {
+                    } catch (IllegalAccessException e) {
                         throw new RuntimeException("Error clearing cache " + cacheField, e);
                     }
                 }
             };
-        }
-        catch (IllegalAccessException | NoSuchFieldException e) {
+        } catch (IllegalAccessException | NoSuchFieldException e) {
             throw new RuntimeException("Error accessing cache field ", e);
         }
     }

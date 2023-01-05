@@ -15,28 +15,14 @@
  */
 package org.neo4j.tool.dto;
 
+import java.util.List;
 import lombok.Builder;
+import lombok.Singular;
 import lombok.Value;
 
 @Value
 @Builder(toBuilder = true)
-public class IndexStatus {
+public class IndexBatch {
 
-    public enum State {
-        ONLINE,
-        POPULATING,
-        FAILED,
-        OTHER;
-
-        public boolean isFailed() {
-            return FAILED == this || OTHER == this;
-        }
-
-        public boolean isOk() {
-            return ONLINE == this || POPULATING == this;
-        }
-    }
-
-    State state;
-    float progress;
+    @Singular List<IndexData> indexes;
 }

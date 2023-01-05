@@ -2,7 +2,6 @@ package org.neo4j.tool.dto;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.gson.GsonBuilder;
-
 import lombok.val;
 import org.junit.Assert;
 import org.junit.Test;

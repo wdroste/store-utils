@@ -1,44 +1,63 @@
+/*
+ * Copyright 2002 Brinqa, Inc. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.neo4j.tool;
 
-import java.util.Collections;
+import static org.neo4j.tool.util.Print.println;
+
+import java.io.File;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import org.neo4j.driver.v1.Driver;
-import org.neo4j.tool.VersionQuery.Neo4jVersion;
+import java.util.stream.Collectors;
+import org.apache.commons.lang3.tuple.Pair;
+import org.neo4j.internal.helpers.collection.Iterables;
+import org.neo4j.tool.dto.Bucket;
 import org.neo4j.tool.dto.IndexData;
-
-import lombok.val;
+import org.neo4j.tool.index.BucketBuilder;
+import org.neo4j.tool.index.IndexManager;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
-import static java.util.Collections.unmodifiableSet;
-import static java.util.stream.Collectors.toSet;
-import static org.neo4j.tool.util.Print.println;
-
 /**
  * Takes a dump file and creates each of the constraints and indexes from that file in a controlled
- * manner. In particular it waits until an index is online before moving to the next as adding to
+ * manner. In particular, it waits until an index is online before moving to the next as adding to
  * many indexes at any onetime will result in either an OOME or a corrupted index that will need to
  * be refreshed again.
  */
 @Command(
-    name = "loadIndex",
-    version = "loadIndex 1.0",
-    description = "Creates indexes and constraints based on the file provided.")
+        name = "loadIndex",
+        version = "loadIndex 1.0",
+        description =
+                "Creates indexes and constraints based on the file provided, skips existing indexes and constraints by name.")
 public class LoadIndex extends AbstractIndexCommand {
 
     @Option(
-        required = true,
-        names = {"-f", "--filename"},
-        description = "Name of the file to load all the indexes.",
-        defaultValue = "dump.json")
-    protected String filename;
+            names = {"-d", "--dryrun"},
+            description = "Just print all the queries.")
+    protected boolean dryRun;
 
     @Option(
-        names = {"-r", "--recreate"},
-        description = "Recreate each of the indexes in the file.")
+            required = true,
+            names = {"-f", "--filename"},
+            description = "File to load all the indexes.",
+            defaultValue = "dump.json")
+    protected File file;
+
+    @Option(
+            names = {"-r", "--recreate"},
+            description = "Recreate each of the indexes in the file.")
     protected boolean recreate;
 
     // this example implements Callable, so parsing, error handling and handling user
@@ -49,36 +68,58 @@ public class LoadIndex extends AbstractIndexCommand {
     }
 
     @Override
-    void execute(final Driver driver) {
-        val ver = VersionQuery.determineVersion(driver);
-        val indexNames = recreate ? Collections.<String>emptySet() : readIndexNames(driver);
-        val fileIndexes = readIndexesFromFilename();
-        final int total = fileIndexes.size();
-        val count = new AtomicInteger();
-        fileIndexes.stream()
-            .peek(ignore -> count.incrementAndGet())
-            .filter(indexData -> !indexData.getLabelsOrTypes().isEmpty())
-            .filter(indexData -> !indexNames.contains(indexData.getName()))
-            .forEach(
-                indexData -> {
-                    println("Progress: %d/%d", count.get(), total);
-                    build(driver, indexData);
-                });
-    }
+    void execute(final IndexManager indexManager) {
+        final var ver = indexManager.determineVersion();
+        final var fileIndexes = indexManager.readIndexesFromFile(file);
 
-    Set<String> readIndexNames(final Driver driver) {
-        return unmodifiableSet(readIndexes(driver).stream().map(IndexData::getName).collect(toSet()));
-    }
-
-    void build(final Driver driver, final IndexData index) {
-        if (recreate) {
-            dropIndex(driver, index);
+        // just print all the queries
+        if (dryRun) {
+            for (IndexData x : fileIndexes) {
+                final String query = indexManager.indexOrConstraintQuery(ver, x);
+                println(query);
+            }
+            return;
         }
-        createIndexWaitForCompletion(driver, index);
+
+        // buckets sizes <1k (100 per), <10k (10 per), <100k (2 per), >100k (1 per)
+        final var indexNames = indexManager.readIndexNames();
+
+        // filter through missing
+        final var missing =
+                fileIndexes.stream()
+                        .filter(indexData -> filterExisting(indexNames, indexData))
+                        .collect(Collectors.toList());
+
+        // find all the sizes
+        final var sizes =
+                missing.parallelStream()
+                        .filter(idx -> idx.getLabelsOrTypes().size() == 1)
+                        .map(idx -> determineSize(indexManager, idx))
+                        .collect(Collectors.toList());
+
+        // process each bucket
+        final var buckets = BucketBuilder.build(sizes);
+        for (Bucket bucket : buckets) {
+            indexManager.create(ver, bucket);
+        }
     }
 
-    @Override
-    String getFilename() {
-        return this.filename;
+    Pair<IndexData, Long> determineSize(IndexManager indexManager, IndexData idx) {
+        String label = Iterables.firstOrNull(idx.getLabelsOrTypes());
+        long size = indexManager.labelSize(label);
+        return Pair.of(idx, size);
+    }
+
+    boolean filterExisting(Set<String> indexNames, IndexData indexData) {
+        if (indexData.getLabelsOrTypes().isEmpty()) {
+            println("Filtering as there's no Label: %s", indexData);
+            return false;
+        }
+        // if recreate always drop and then create
+        if (!recreate && indexNames.contains(indexData.getName())) {
+            println("Index with name '%s' already exists, skipping.", indexData.getName());
+            return false;
+        }
+        return true;
     }
 }

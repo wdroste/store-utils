@@ -1,9 +1,7 @@
 package org.neo4j.tool.dto;
 
-import java.util.Set;
-
 import com.google.gson.annotations.SerializedName;
-
+import java.util.Set;
 import lombok.Data;
 import lombok.Singular;
 

@@ -1,17 +1,14 @@
 package org.neo4j.tool.dto;
 
-import java.util.Collections;
+import static java.util.Collections.singleton;
+import static org.neo4j.tool.StoreCopyUtil.labelInSet;
 
 import com.google.common.collect.ImmutableSet;
-
-import org.neo4j.graphdb.Label;
-
+import java.util.Collections;
 import lombok.Value;
 import org.junit.Assert;
 import org.junit.Test;
-
-import static java.util.Collections.singleton;
-import static org.neo4j.tool.StoreCopyUtil.labelInSet;
+import org.neo4j.graphdb.Label;
 
 public class StoreCopyUtilTest {
 
@@ -37,8 +34,14 @@ public class StoreCopyUtilTest {
         Assert.assertFalse(labelInSet(singleton(TestLabel.of("ABC")), singleton("AB")));
 
         Assert.assertFalse(labelInSet(singleton(TestLabel.of("ABC")), ImmutableSet.of("AB", "AA")));
-        Assert.assertFalse(labelInSet(ImmutableSet.of(TestLabel.of("ABC"), TestLabel.of("XYZ")), ImmutableSet.of("AB", "AA")));
+        Assert.assertFalse(
+                labelInSet(
+                        ImmutableSet.of(TestLabel.of("ABC"), TestLabel.of("XYZ")),
+                        ImmutableSet.of("AB", "AA")));
 
-        Assert.assertTrue(labelInSet(ImmutableSet.of(TestLabel.of("ABC"), TestLabel.of("AA")), ImmutableSet.of("AB", "AA")));
+        Assert.assertTrue(
+                labelInSet(
+                        ImmutableSet.of(TestLabel.of("ABC"), TestLabel.of("AA")),
+                        ImmutableSet.of("AB", "AA")));
     }
 }

@@ -1,12 +1,19 @@
 package org.neo4j.tool;
 
+import static org.neo4j.tool.StoreCopyUtil.buildFlusher;
+import static org.neo4j.tool.StoreCopyUtil.labelInSet;
+import static org.neo4j.tool.StoreCopyUtil.toArray;
+
 import java.io.File;
 import java.io.FileWriter;
 import java.io.PrintWriter;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
-
+import lombok.RequiredArgsConstructor;
+import org.eclipse.collections.api.map.primitive.LongLongMap;
+import org.eclipse.collections.api.map.primitive.MutableLongLongMap;
+import org.eclipse.collections.impl.map.mutable.primitive.LongLongHashMap;
 import org.neo4j.graphdb.Label;
 import org.neo4j.graphdb.RelationshipType;
 import org.neo4j.graphdb.factory.GraphDatabaseFactory;
@@ -22,15 +29,6 @@ import org.neo4j.tool.dto.StoreCopyConfiguration;
 import org.neo4j.unsafe.batchinsert.BatchInserter;
 import org.neo4j.unsafe.batchinsert.BatchInserters;
 import org.neo4j.unsafe.batchinsert.BatchRelationship;
-
-import lombok.RequiredArgsConstructor;
-import org.eclipse.collections.api.map.primitive.LongLongMap;
-import org.eclipse.collections.api.map.primitive.MutableLongLongMap;
-import org.eclipse.collections.impl.map.mutable.primitive.LongLongHashMap;
-
-import static org.neo4j.tool.StoreCopyUtil.buildFlusher;
-import static org.neo4j.tool.StoreCopyUtil.labelInSet;
-import static org.neo4j.tool.StoreCopyUtil.toArray;
 
 @RequiredArgsConstructor
 public class StoreCopy {
@@ -52,11 +50,13 @@ public class StoreCopy {
         final Flusher flusher = buildFlusher(sourceDb);
 
         if (!target.mkdirs()) {
-            throw new IllegalArgumentException("Unable to create directory for target copy - " + target.getAbsolutePath());
+            throw new IllegalArgumentException(
+                    "Unable to create directory for target copy - " + target.getAbsolutePath());
         }
         logs = new PrintWriter(new FileWriter(new File(target, "store-copy.log")));
 
-        final Map<String, String> targetConfig = MapUtil.stringMap("dbms.pagecache.memory", pageCacheSize);
+        final Map<String, String> targetConfig =
+                MapUtil.stringMap("dbms.pagecache.memory", pageCacheSize);
         BatchInserter targetDb = BatchInserters.inserter(target, targetConfig);
         LongLongMap copiedNodeIds = copyNodes(sourceDb, targetDb, highestIds.first(), flusher);
         copyRelationships(sourceDb, targetDb, copiedNodeIds, highestIds.other(), flusher);
@@ -66,39 +66,41 @@ public class StoreCopy {
         try {
             System.out.println("Stopping source database");
             sourceDb.shutdown();
-        }
-        catch (Exception e) {
-            logs.append(String.format("Noncritical error closing the source database:%n%s", Exceptions.stringify(e)));
+        } catch (Exception e) {
+            logs.append(
+                    String.format(
+                            "Noncritical error closing the source database:%n%s",
+                            Exceptions.stringify(e)));
         }
         System.out.println("Stopped source database");
         logs.close();
     }
 
-
     private static GraphDatabaseFactory factory() {
         try {
             final String className = "org.neo4j.graphdb.factory.EnterpriseGraphDatabaseFactory";
             return (GraphDatabaseFactory) Class.forName(className).newInstance();
-        }
-        catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
+        } catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
             return new GraphDatabaseFactory();
         }
     }
 
     private static Pair<Long, Long> getHighestNodeId(File source) {
         GraphDatabaseAPI api = (GraphDatabaseAPI) factory().newEmbeddedDatabase(source);
-        IdGeneratorFactory idGenerators = api.getDependencyResolver().provideDependency(IdGeneratorFactory.class).get();
+        IdGeneratorFactory idGenerators =
+                api.getDependencyResolver().provideDependency(IdGeneratorFactory.class).get();
         long highestNodeId = idGenerators.get(IdType.NODE).getHighestPossibleIdInUse();
         long highestRelId = idGenerators.get(IdType.RELATIONSHIP).getHighestPossibleIdInUse();
         api.shutdown();
         return Pair.of(highestNodeId, highestRelId);
     }
 
-    private void copyRelationships(final BatchInserter sourceDb,
-                                   final BatchInserter targetDb,
-                                   final LongLongMap copiedNodeIds,
-                                   final long highestRelId,
-                                   final Flusher flusher) {
+    private void copyRelationships(
+            final BatchInserter sourceDb,
+            final BatchInserter targetDb,
+            final LongLongMap copiedNodeIds,
+            final long highestRelId,
+            final Flusher flusher) {
         long time = System.currentTimeMillis();
         long relId = 0;
         long notFound = 0;
@@ -112,13 +114,15 @@ public class StoreCopy {
                 if (!createRelationship(targetDb, sourceDb, rel, copiedNodeIds)) {
                     removed++;
                 }
-            }
-            catch (Exception e) {
-                if (e instanceof org.neo4j.kernel.impl.store.InvalidRecordException && e.getMessage().endsWith("not in use")) {
+            } catch (Exception e) {
+                if (e instanceof org.neo4j.kernel.impl.store.InvalidRecordException
+                        && e.getMessage().endsWith("not in use")) {
                     notFound++;
-                }
-                else {
-                    addLog(rel, "copy Relationship: " + (relId - 1) + "-[:" + type + "]" + "->?", e.getMessage());
+                } else {
+                    addLog(
+                            rel,
+                            "copy Relationship: " + (relId - 1) + "-[:" + type + "]" + "->?",
+                            e.getMessage());
                 }
             }
             if (relId % 10000 == 0) {
@@ -127,22 +131,29 @@ public class StoreCopy {
             }
             if (relId % 500000 == 0) {
                 flusher.flush();
-                System.out.printf(" %d / %d (%d%%) unused %d removed %d%n", relId, highestRelId, percent(relId, highestRelId), notFound, removed);
+                System.out.printf(
+                        " %d / %d (%d%%) unused %d removed %d%n",
+                        relId, highestRelId, percent(relId, highestRelId), notFound, removed);
             }
         }
         time = Math.max(1, (System.currentTimeMillis() - time) / 1000);
-        System.out.printf("%n copying of %d relationship records took %d seconds (%d rec/s). Unused Records %d (%d%%) Removed Records %d (%d%%)%n",
-                          relId, time, relId / time, notFound, percent(notFound, relId), removed, percent(removed, relId));
+        System.out.printf(
+                "%n copying of %d relationship records took %d seconds (%d rec/s). Unused Records %d (%d%%) Removed Records %d (%d%%)%n",
+                relId,
+                time,
+                relId / time,
+                notFound,
+                percent(notFound, relId),
+                removed,
+                percent(removed, relId));
     }
 
     private static int percent(Number part, Number total) {
         return (int) (100 * part.floatValue() / total.floatValue());
     }
 
-    private LongLongMap copyNodes(BatchInserter sourceDb,
-                                  BatchInserter targetDb,
-                                  long highestNodeId,
-                                  Flusher flusher) {
+    private LongLongMap copyNodes(
+            BatchInserter sourceDb, BatchInserter targetDb, long highestNodeId, Flusher flusher) {
         MutableLongLongMap copiedNodes = new LongLongHashMap(10_000_000);
         long time = System.currentTimeMillis();
         long node = 0;
@@ -154,21 +165,20 @@ public class StoreCopy {
                     final Set<Label> nodeLabels = Iterables.asSet(sourceDb.getNodeLabels(node));
                     if (labelInSet(nodeLabels, configuration.getDeleteNodesWithLabels())) {
                         removed++;
-                    }
-                    else {
-                        long newNodeId = targetDb.createNode(sourceDb.getNodeProperties(node), toArray(nodeLabels));
+                    } else {
+                        long newNodeId =
+                                targetDb.createNode(
+                                        sourceDb.getNodeProperties(node), toArray(nodeLabels));
                         copiedNodes.put(node, newNodeId);
                     }
-                }
-                else {
+                } else {
                     notFound++;
                 }
-            }
-            catch (Exception e) {
-                if (e instanceof org.neo4j.kernel.impl.store.InvalidRecordException && e.getMessage().endsWith("not in use")) {
+            } catch (Exception e) {
+                if (e instanceof org.neo4j.kernel.impl.store.InvalidRecordException
+                        && e.getMessage().endsWith("not in use")) {
                     notFound++;
-                }
-                else {
+                } else {
                     addLog(node, e.getMessage());
                 }
             }
@@ -179,19 +189,29 @@ public class StoreCopy {
             if (node % 500000 == 0) {
                 flusher.flush();
                 logs.flush();
-                System.out.printf(" %d / %d (%d%%) unused %d removed %d%n", node, highestNodeId, percent(node, highestNodeId), notFound, removed);
+                System.out.printf(
+                        " %d / %d (%d%%) unused %d removed %d%n",
+                        node, highestNodeId, percent(node, highestNodeId), notFound, removed);
             }
         }
         time = Math.max(1, (System.currentTimeMillis() - time) / 1000);
-        System.out.printf("%n copying of %d node records took %d seconds (%d rec/s). Unused Records %d (%d%%). Removed Records %d (%d%%).%n",
-                          node, time, node / time, notFound, percent(notFound, node), removed, percent(removed, node));
+        System.out.printf(
+                "%n copying of %d node records took %d seconds (%d rec/s). Unused Records %d (%d%%). Removed Records %d (%d%%).%n",
+                node,
+                time,
+                node / time,
+                notFound,
+                percent(notFound, node),
+                removed,
+                percent(removed, node));
         return copiedNodes;
     }
 
-    private boolean createRelationship(BatchInserter targetDb,
-                                       BatchInserter sourceDb,
-                                       BatchRelationship rel,
-                                       LongLongMap copiedNodeIds) {
+    private boolean createRelationship(
+            BatchInserter targetDb,
+            BatchInserter sourceDb,
+            BatchRelationship rel,
+            LongLongMap copiedNodeIds) {
         long startNodeId = rel.getStartNode(), endNodeId = rel.getEndNode();
         if (copiedNodeIds != null) {
             startNodeId = copiedNodeIds.get(startNodeId);
@@ -205,9 +225,11 @@ public class StoreCopy {
             Map<String, Object> props = sourceDb.getRelationshipProperties(rel.getId());
             targetDb.createRelationship(startNodeId, endNodeId, type, props);
             return true;
-        }
-        catch (Exception e) {
-            addLog(rel, "create Relationship: " + startNodeId + "-[:" + type + "]" + "->" + endNodeId, e.getMessage());
+        } catch (Exception e) {
+            addLog(
+                    rel,
+                    "create Relationship: " + startNodeId + "-[:" + type + "]" + "->" + endNodeId,
+                    e.getMessage());
             return false;
         }
     }
