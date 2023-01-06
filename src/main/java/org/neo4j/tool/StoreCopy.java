@@ -23,10 +23,9 @@ import org.neo4j.unsafe.batchinsert.BatchInserter;
 import org.neo4j.unsafe.batchinsert.BatchInserters;
 import org.neo4j.unsafe.batchinsert.BatchRelationship;
 
+import it.unimi.dsi.fastutil.longs.Long2LongMap;
+import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import lombok.RequiredArgsConstructor;
-import org.eclipse.collections.api.map.primitive.LongLongMap;
-import org.eclipse.collections.api.map.primitive.MutableLongLongMap;
-import org.eclipse.collections.impl.map.mutable.primitive.LongLongHashMap;
 
 import static org.neo4j.tool.StoreCopyUtil.buildFlusher;
 import static org.neo4j.tool.StoreCopyUtil.labelInSet;
@@ -58,7 +57,7 @@ public class StoreCopy {
 
         final Map<String, String> targetConfig = MapUtil.stringMap("dbms.pagecache.memory", pageCacheSize);
         BatchInserter targetDb = BatchInserters.inserter(target, targetConfig);
-        LongLongMap copiedNodeIds = copyNodes(sourceDb, targetDb, highestIds.first(), flusher);
+        Long2LongMap copiedNodeIds = copyNodes(sourceDb, targetDb, highestIds.first(), flusher);
         copyRelationships(sourceDb, targetDb, copiedNodeIds, highestIds.other(), flusher);
         System.out.println("Stopping target database");
         targetDb.shutdown();
@@ -96,7 +95,7 @@ public class StoreCopy {
 
     private void copyRelationships(final BatchInserter sourceDb,
                                    final BatchInserter targetDb,
-                                   final LongLongMap copiedNodeIds,
+                                   final Long2LongMap copiedNodeIds,
                                    final long highestRelId,
                                    final Flusher flusher) {
         long time = System.currentTimeMillis();
@@ -139,11 +138,12 @@ public class StoreCopy {
         return (int) (100 * part.floatValue() / total.floatValue());
     }
 
-    private LongLongMap copyNodes(BatchInserter sourceDb,
+    private Long2LongMap copyNodes(BatchInserter sourceDb,
                                   BatchInserter targetDb,
                                   long highestNodeId,
                                   Flusher flusher) {
-        MutableLongLongMap copiedNodes = new LongLongHashMap(10_000_000);
+
+        Long2LongMap copiedNodes = new Long2LongOpenHashMap(10_000_000);
         long time = System.currentTimeMillis();
         long node = 0;
         long notFound = 0;
@@ -169,7 +169,8 @@ public class StoreCopy {
                     notFound++;
                 }
                 else {
-                    addLog(node, e.getMessage());
+                    String msg = e.getMessage();
+                    addLog(node, msg != null ? msg : e.getClass().getName());
                 }
             }
             node++;
@@ -191,7 +192,8 @@ public class StoreCopy {
     private boolean createRelationship(BatchInserter targetDb,
                                        BatchInserter sourceDb,
                                        BatchRelationship rel,
-                                       LongLongMap copiedNodeIds) {
+                                       Long2LongMap copiedNodeIds) {
+
         long startNodeId = rel.getStartNode(), endNodeId = rel.getEndNode();
         if (copiedNodeIds != null) {
             startNodeId = copiedNodeIds.get(startNodeId);
@@ -219,4 +221,5 @@ public class StoreCopy {
     private void addLog(long node, String message) {
         logs.append(String.format("Node: %s %s%n", node, message));
     }
+
 }
