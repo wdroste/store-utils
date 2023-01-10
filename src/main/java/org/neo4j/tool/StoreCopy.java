@@ -196,8 +196,8 @@ public class StoreCopy {
 
         long startNodeId = rel.getStartNode(), endNodeId = rel.getEndNode();
         if (copiedNodeIds != null) {
-            startNodeId = copiedNodeIds.get(startNodeId);
-            endNodeId = copiedNodeIds.get(endNodeId);
+            startNodeId = copiedNodeIds.getOrDefault(startNodeId, -1L);
+            endNodeId = copiedNodeIds.getOrDefault(endNodeId, -1L);
         }
         if (startNodeId == -1L || endNodeId == -1L) {
             return false;
