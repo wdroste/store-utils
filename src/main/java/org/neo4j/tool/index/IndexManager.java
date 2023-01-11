@@ -187,9 +187,7 @@ public class IndexManager {
     }
 
     public String indexOrConstraintQuery(Neo4jVersion version, IndexData indexData) {
-        return indexData.isUniqueness()
-                ? constraintQuery(indexData)
-                : indexQuery(indexData);
+        return indexData.isUniqueness() ? constraintQuery(indexData) : indexQuery(indexData);
     }
 
     IndexStatus indexProgress(IndexData indexData) {
@@ -216,7 +214,8 @@ public class IndexManager {
     }
 
     IndexStatus toIndexState(Transaction tx, IndexData index) {
-        val fmt = "call db.indexes() yield description, state, progress WHERE description contains \":%s(%s)\" return state, progress";
+        val fmt =
+                "call db.indexes() yield description, state, progress WHERE description contains \":%s(%s)\" return state, progress";
         val props = String.join(",", index.getProperties());
         val label = Iterables.firstOrNull(index.getLabelsOrTypes());
         val result = tx.run(String.format(fmt, label, props));
