@@ -20,14 +20,14 @@ import static org.neo4j.tool.util.Flusher.newFlusher;
 import static org.neo4j.tool.util.Print.println;
 import static org.neo4j.tool.util.Print.progressPercentage;
 
+import it.unimi.dsi.fastutil.longs.Long2LongMap;
+import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 import lombok.AllArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.eclipse.collections.api.map.primitive.LongLongMap;
-import org.eclipse.collections.impl.map.mutable.primitive.LongLongHashMap;
 import org.neo4j.batchinsert.BatchInserter;
 import org.neo4j.graphdb.Label;
 import org.neo4j.internal.helpers.collection.Iterables;
@@ -44,7 +44,7 @@ public class NodeCopyJob {
     private final BatchInserter targetDb;
     private final String acceptanceScript;
 
-    public LongLongMap process() {
+    public Long2LongMap process() {
         try (PredicateBuilder builder = new PredicateBuilder()) {
             final var predicate = builder.newInstance(acceptanceScript);
             return new NodeCopyProcessor(predicate).process();
@@ -65,14 +65,14 @@ public class NodeCopyJob {
 
         private final Flusher flusher = newFlusher(sourceDb);
 
-        private final LongLongHashMap copiedNodes = new LongLongHashMap(10_000_000);
+        private final Long2LongMap copiedNodes = new Long2LongOpenHashMap();
 
         private long count = 0L;
         private long notFound = 0L;
         private long removed = 0L;
         private long progress = System.currentTimeMillis();
 
-        public LongLongMap process() {
+        public Long2LongMap process() {
             // run the task
             LongStream.range(0, bound).forEach(this::processNode);
             // print the final percentage

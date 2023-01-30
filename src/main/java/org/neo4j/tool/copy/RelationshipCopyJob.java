@@ -20,9 +20,9 @@ import static org.neo4j.tool.util.Neo4jHelper.percent;
 import static org.neo4j.tool.util.Print.printf;
 import static org.neo4j.tool.util.Print.progressPercentage;
 
+import it.unimi.dsi.fastutil.longs.Long2LongMap;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.eclipse.collections.api.map.primitive.LongLongMap;
 import org.neo4j.batchinsert.BatchInserter;
 import org.neo4j.batchinsert.internal.BatchRelationship;
 import org.neo4j.kernel.impl.store.InvalidRecordException;
@@ -35,7 +35,7 @@ public class RelationshipCopyJob {
     private final BatchInserter sourceDb;
     private final BatchInserter targetDb;
 
-    public void process(LongLongMap copiedNodeIds) {
+    public void process(Long2LongMap copiedNodeIds) {
 
         long time = System.currentTimeMillis();
         long relId = 0;
@@ -88,10 +88,13 @@ public class RelationshipCopyJob {
                 percent(removed, relId));
     }
 
-    boolean createRelationship(BatchRelationship rel, LongLongMap copiedNodeIds) {
+    boolean createRelationship(BatchRelationship rel, Long2LongMap copiedNodeIds) {
         try {
-            final long startNodeId = copiedNodeIds.get(rel.getStartNode());
-            final long endNodeId = copiedNodeIds.get(rel.getEndNode());
+            final long startNodeId = copiedNodeIds.getOrDefault(rel.getStartNode(), -1L);
+            final long endNodeId = copiedNodeIds.getOrDefault(rel.getEndNode(), -1L);
+            if (startNodeId == -1L || endNodeId == -1L) {
+                return false;
+            }
             final var props = sourceDb.getRelationshipProperties(rel.getId());
             targetDb.createRelationship(startNodeId, endNodeId, rel.getType(), props);
             return true;

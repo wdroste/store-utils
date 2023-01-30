@@ -24,12 +24,12 @@ import static org.neo4j.tool.util.Neo4jHelper.newBatchInserter;
 import static org.neo4j.tool.util.Neo4jHelper.shutdown;
 import static org.neo4j.tool.util.Print.println;
 
+import it.unimi.dsi.fastutil.longs.Long2LongMap;
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Set;
-import org.eclipse.collections.api.map.primitive.LongLongMap;
 import org.neo4j.batchinsert.BatchInserter;
 import org.neo4j.configuration.Config;
 import org.neo4j.tool.copy.NodeCopyJob;
@@ -156,7 +156,7 @@ public class StoreCopy implements Runnable {
             // copy nodes from source to target
             final var nodeCopyJob =
                     new NodeCopyJob(highestInfo.getNodeId(), sourceDb, targetDb, acceptanceScript);
-            final LongLongMap copiedNodeIds = nodeCopyJob.process();
+            final Long2LongMap copiedNodeIds = nodeCopyJob.process();
 
             // copy relationships from source to target
             final var relationshipCopyJob =
