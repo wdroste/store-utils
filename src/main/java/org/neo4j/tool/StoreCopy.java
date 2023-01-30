@@ -29,6 +29,7 @@ import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.Optional;
 import java.util.Set;
 import org.neo4j.batchinsert.BatchInserter;
 import org.neo4j.configuration.Config;
@@ -73,6 +74,11 @@ public class StoreCopy implements Runnable {
             description =
                     "Groovy script file that provides acceptance criteria for a node to be copied.")
     private File script;
+
+    @Option(
+            names = {"-l", "--deleteNodesWithLabel"},
+            description = "Delete nodes with label.")
+    private Set<String> deleteNodesWithLabel;
 
     // this example implements Callable, so parsing, error handling and handling user
     // requests for usage help or version help can be done with one line of code.
@@ -154,8 +160,14 @@ public class StoreCopy implements Runnable {
         @Override
         public void run() {
             // copy nodes from source to target
+            final var deletionLabels = Optional.ofNullable(deleteNodesWithLabel).orElse(Set.of());
             final var nodeCopyJob =
-                    new NodeCopyJob(highestInfo.getNodeId(), sourceDb, targetDb, acceptanceScript);
+                    new NodeCopyJob(
+                            highestInfo.getNodeId(),
+                            sourceDb,
+                            targetDb,
+                            acceptanceScript,
+                            deletionLabels);
             final Long2LongMap copiedNodeIds = nodeCopyJob.process();
 
             // copy relationships from source to target

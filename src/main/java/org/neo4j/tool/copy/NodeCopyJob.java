@@ -22,6 +22,8 @@ import static org.neo4j.tool.util.Print.progressPercentage;
 
 import it.unimi.dsi.fastutil.longs.Long2LongMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
+import java.util.List;
+import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
@@ -33,6 +35,7 @@ import org.neo4j.graphdb.Label;
 import org.neo4j.internal.helpers.collection.Iterables;
 import org.neo4j.kernel.impl.store.InvalidRecordException;
 import org.neo4j.tool.util.Flusher;
+import org.neo4j.tool.util.PredicateHelper;
 
 /** NOTE: {@link BatchInserter} is not thread safe. */
 @Slf4j
@@ -43,6 +46,7 @@ public class NodeCopyJob {
     private final BatchInserter sourceDb;
     private final BatchInserter targetDb;
     private final String acceptanceScript;
+    private final Set<String> deleteNodesWithLabels;
 
     public Long2LongMap process() {
         try (PredicateBuilder builder = new PredicateBuilder()) {
@@ -71,6 +75,9 @@ public class NodeCopyJob {
         private long notFound = 0L;
         private long removed = 0L;
         private long progress = System.currentTimeMillis();
+
+        private final Predicate<List<String>> testDeleteLabels =
+                PredicateHelper.buildLabelInverseMatcher(deleteNodesWithLabels);
 
         public Long2LongMap process() {
             // run the task
@@ -115,7 +122,7 @@ public class NodeCopyJob {
             // create a node object for criteria testing
             final var labelNames = labels.stream().map(Label::name).collect(Collectors.toList());
             final var node = new NodeObject(labelNames, properties);
-            if (acceptance.test(node)) {
+            if (testDeleteLabels.test(labelNames) && acceptance.test(node)) {
                 // accepted create the node
                 final var nodeLabels = labels.toArray(new Label[] {});
                 return targetDb.createNode(properties, nodeLabels);
