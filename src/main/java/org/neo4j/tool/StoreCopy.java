@@ -136,6 +136,10 @@ public class StoreCopy implements Runnable {
 
             final var srcPath = sourceConfig.get(data_directory);
 
+            if (deleteNodesWithLabel != null && !deleteNodesWithLabel.isEmpty()) {
+                println("Delete Nodes with Label(s): " + deleteNodesWithLabel);
+            }
+
             println("Copying from %s to %s", srcPath, targetDataDirectory);
 
             // avoid nasty warning
