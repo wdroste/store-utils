@@ -16,8 +16,8 @@
 package org.neo4j.tool.util;
 
 import static org.neo4j.configuration.GraphDatabaseSettings.data_directory;
-import static org.neo4j.internal.recordstorage.RecordIdType.NODE;
-import static org.neo4j.internal.recordstorage.RecordIdType.RELATIONSHIP;
+import static org.neo4j.internal.id.IdType.NODE;
+import static org.neo4j.internal.id.IdType.RELATIONSHIP;
 import static org.neo4j.tool.util.Print.println;
 
 import java.io.File;
@@ -62,7 +62,7 @@ public class Neo4jHelper {
         final var home = sourceConfig.get(GraphDatabaseSettings.neo4j_home);
         println("Neo4j Home: %s", home);
 
-        final var managementServiceBld = new DatabaseManagementServiceBuilder(home);
+        final var managementServiceBld = new DatabaseManagementServiceBuilder(home.toFile());
         managementServiceBld.setConfig(data_directory, sourceDataDirectory.toPath());
         println(
                 "Opening Source Neo4j Database (this can take considerable time): %s",

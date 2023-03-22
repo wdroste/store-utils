@@ -18,8 +18,6 @@ package org.neo4j.tool;
 import static org.neo4j.configuration.GraphDatabaseSettings.allow_upgrade;
 import static org.neo4j.configuration.GraphDatabaseSettings.data_directory;
 import static org.neo4j.configuration.GraphDatabaseSettings.pagecache_memory;
-import static org.neo4j.configuration.GraphDatabaseSettings.read_only_databases;
-import static org.neo4j.configuration.GraphDatabaseSettings.writable_databases;
 import static org.neo4j.tool.util.Neo4jHelper.newBatchInserter;
 import static org.neo4j.tool.util.Neo4jHelper.shutdown;
 import static org.neo4j.tool.util.Print.println;
@@ -116,11 +114,10 @@ public class StoreCopy implements Runnable {
             // create a source configuration from main install
             final var sourceCfgBld = Config.newBuilder();
             if (null != sourceConfigurationFile && sourceConfigurationFile.isFile()) {
-                sourceCfgBld.fromFile(sourceConfigurationFile.toPath());
+                sourceCfgBld.fromFile(sourceConfigurationFile);
             } else {
                 sourceCfgBld.set(pagecache_memory, "4G");
                 sourceCfgBld.set(allow_upgrade, true);
-                sourceCfgBld.set(read_only_databases, Set.of(databaseName));
             }
             sourceCfgBld.set(data_directory, sourceDataDirectory.toPath());
             final var sourceConfig = sourceCfgBld.build();
@@ -129,8 +126,6 @@ public class StoreCopy implements Runnable {
             final var targetConfig =
                     Config.newBuilder()
                             .fromConfig(sourceConfig)
-                            .set(read_only_databases, Set.of())
-                            .set(writable_databases, Set.of(databaseName))
                             .set(data_directory, targetDataDirectory.toPath())
                             .build();
 
@@ -143,7 +138,7 @@ public class StoreCopy implements Runnable {
             println("Copying from %s to %s", srcPath, targetDataDirectory);
 
             // avoid nasty warning
-            org.neo4j.internal.unsafe.IllegalAccessLoggerSuppressor.suppress();
+            //org.neo4j.internal.unsafe.IllegalAccessLoggerSuppressor.suppress();
 
             // find the highest node
             this.highestInfo =
