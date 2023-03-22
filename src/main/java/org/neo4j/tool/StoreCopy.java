@@ -138,7 +138,7 @@ public class StoreCopy implements Runnable {
             println("Copying from %s to %s", srcPath, targetDataDirectory);
 
             // avoid nasty warning
-            //org.neo4j.internal.unsafe.IllegalAccessLoggerSuppressor.suppress();
+            // org.neo4j.internal.unsafe.IllegalAccessLoggerSuppressor.suppress();
 
             // find the highest node
             this.highestInfo =
