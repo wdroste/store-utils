@@ -95,7 +95,7 @@ public class NodeCopyJob {
                     notFound++;
                 } else {
                     final long targetNodeId = copyNode(sourceNodeId);
-                    if (targetNodeId > 0) {
+                    if (targetNodeId >= 0) {
                         copiedNodes.put(sourceNodeId, targetNodeId);
                     }
                 }
