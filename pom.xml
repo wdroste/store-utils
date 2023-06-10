@@ -11,7 +11,7 @@
 
     <properties>
         <revision>4.4.20.x-SNAPSHOT</revision>
-        <neo4j.version>4.4.20</neo4j.version>
+        <neo4j.version>4.4.21</neo4j.version>
         <neo4j.driver.version>4.4.11</neo4j.driver.version>
 
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
