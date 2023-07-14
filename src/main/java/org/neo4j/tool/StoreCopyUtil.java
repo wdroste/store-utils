@@ -1,10 +1,5 @@
 package org.neo4j.tool;
 
-import java.lang.reflect.Field;
-import java.util.Collection;
-import java.util.Map;
-import java.util.Set;
-
 import org.neo4j.graphdb.Label;
 import org.neo4j.helpers.collection.Iterables;
 import org.neo4j.unsafe.batchinsert.BatchInserter;
@@ -12,6 +7,11 @@ import org.neo4j.unsafe.batchinsert.internal.BatchInserterImpl;
 import org.neo4j.unsafe.batchinsert.internal.DirectRecordAccess;
 import org.neo4j.unsafe.batchinsert.internal.DirectRecordAccessSet;
 import org.neo4j.unsafe.batchinsert.internal.FileSystemClosingBatchInserter;
+
+import java.lang.reflect.Field;
+import java.util.Collection;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Static methods from StoreUtil.

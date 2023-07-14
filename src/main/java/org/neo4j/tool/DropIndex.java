@@ -1,14 +1,13 @@
 package org.neo4j.tool;
 
-import java.io.File;
-import java.util.List;
-
 import org.neo4j.driver.v1.Driver;
 import org.neo4j.tool.dto.IndexData;
-
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
+
+import java.io.File;
+import java.util.List;
 
 import static org.neo4j.tool.util.Print.println;
 
@@ -27,7 +26,7 @@ public class DropIndex extends AbstractIndexCommand {
     @Option(
             required = true,
             names = {"-f", "--file"},
-            description = "File to use to drop indexes.")
+            description = "File to use to dump indexes.")
     protected File file;
 
     // this example implements Callable, so parsing, error handling and handling user
@@ -49,7 +48,7 @@ public class DropIndex extends AbstractIndexCommand {
     }
 
     @Override
-    String getFilename() {
-        return this.file.getName();
+    File getFile() {
+        return this.file;
     }
 }

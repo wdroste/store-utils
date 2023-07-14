@@ -1,20 +1,16 @@
 package org.neo4j.tool;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.util.List;
-
 import org.apache.commons.lang3.StringUtils;
-
 import org.neo4j.driver.v1.Driver;
 import org.neo4j.tool.dto.IndexData;
-
-import lombok.val;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.util.List;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.neo4j.tool.util.Print.println;
@@ -70,7 +66,7 @@ public class RebuildIndex extends AbstractIndexCommand {
     }
 
     @Override
-    String getFilename() {
-        return this.file.getName();
+    File getFile() {
+        return this.file;
     }
 }

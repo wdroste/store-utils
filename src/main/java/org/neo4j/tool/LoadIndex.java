@@ -1,17 +1,16 @@
 package org.neo4j.tool;
 
-import java.util.Collections;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import org.neo4j.driver.v1.Driver;
-import org.neo4j.tool.VersionQuery.Neo4jVersion;
-import org.neo4j.tool.dto.IndexData;
-
 import lombok.val;
+import org.neo4j.driver.v1.Driver;
+import org.neo4j.tool.dto.IndexData;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
+
+import java.io.File;
+import java.util.Collections;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Collections.unmodifiableSet;
 import static java.util.stream.Collectors.toSet;
@@ -34,7 +33,7 @@ public class LoadIndex extends AbstractIndexCommand {
         names = {"-f", "--filename"},
         description = "Name of the file to load all the indexes.",
         defaultValue = "dump.json")
-    protected String filename;
+    protected File file;
 
     @Option(
         names = {"-r", "--recreate"},
@@ -50,10 +49,9 @@ public class LoadIndex extends AbstractIndexCommand {
 
     @Override
     void execute(final Driver driver) {
-        val ver = VersionQuery.determineVersion(driver);
         val indexNames = recreate ? Collections.<String>emptySet() : readIndexNames(driver);
         val fileIndexes = readIndexesFromFilename();
-        final int total = fileIndexes.size();
+        val total = fileIndexes.size();
         val count = new AtomicInteger();
         fileIndexes.stream()
             .peek(ignore -> count.incrementAndGet())
@@ -64,6 +62,9 @@ public class LoadIndex extends AbstractIndexCommand {
                     println("Progress: %d/%d", count.get(), total);
                     build(driver, indexData);
                 });
+        if (fileIndexes.isEmpty()) {
+            println("No indexes in the file specified: %s", file);
+        }
     }
 
     Set<String> readIndexNames(final Driver driver) {
@@ -78,7 +79,7 @@ public class LoadIndex extends AbstractIndexCommand {
     }
 
     @Override
-    String getFilename() {
-        return this.filename;
+    File getFile() {
+        return this.file;
     }
 }

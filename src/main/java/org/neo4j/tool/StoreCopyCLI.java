@@ -1,21 +1,19 @@
 package org.neo4j.tool;
 
-import java.io.File;
-import java.nio.charset.StandardCharsets;
-
 import com.google.common.collect.ImmutableSet;
 import com.google.gson.GsonBuilder;
-
-import org.neo4j.io.fs.FileUtils;
-import org.neo4j.tool.dto.StoreCopyConfiguration;
-
 import lombok.SneakyThrows;
 import lombok.val;
+import org.neo4j.io.fs.FileUtils;
+import org.neo4j.tool.dto.StoreCopyConfiguration;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.MissingParameterException;
 import picocli.CommandLine.Parameters;
 import picocli.CommandLine.UnmatchedArgumentException;
+
+import java.io.File;
+import java.nio.charset.StandardCharsets;
 
 @Command(
     name = "storeCopy",

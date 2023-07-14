@@ -1,9 +1,9 @@
 package org.neo4j.tool.dto;
 
-import java.util.List;
-
 import lombok.Builder;
 import lombok.Value;
+
+import java.util.List;
 
 @Value
 @Builder(toBuilder = true)

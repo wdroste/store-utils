@@ -1,23 +1,7 @@
 package org.neo4j.tool;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
-import java.util.function.UnaryOperator;
-import java.util.stream.Collectors;
-
 import com.google.gson.GsonBuilder;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
+import lombok.val;
 import org.neo4j.driver.v1.AuthTokens;
 import org.neo4j.driver.v1.Config;
 import org.neo4j.driver.v1.Driver;
@@ -31,9 +15,22 @@ import org.neo4j.helpers.collection.Iterables;
 import org.neo4j.tool.dto.IndexData;
 import org.neo4j.tool.dto.IndexStatus;
 import org.neo4j.tool.dto.IndexStatus.State;
-
-import lombok.val;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import picocli.CommandLine.Option;
+
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+import java.util.function.UnaryOperator;
+import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.joining;
 import static org.neo4j.tool.util.Print.println;
@@ -77,7 +74,7 @@ abstract class AbstractIndexCommand implements Runnable {
 
     abstract void execute(Driver driver) throws IOException;
 
-    abstract String getFilename();
+    abstract File getFile();
 
     private Driver buildDriver(String uri, String username, String password, boolean noAuth) {
         // create the driver
@@ -142,7 +139,7 @@ abstract class AbstractIndexCommand implements Runnable {
     }
 
     List<IndexData> readIndexesFromFilename() {
-        return readIndexesFromFile(new File(this.getFilename()));
+        return readIndexesFromFile(getFile());
     }
 
     List<IndexData> readIndexesFromFile(File f) {
@@ -284,7 +281,7 @@ abstract class AbstractIndexCommand implements Runnable {
 
     void writeIndexes(List<IndexData> indexes) {
         val gson = new GsonBuilder().create();
-        try (val wrt = new BufferedWriter(new FileWriter(getFilename()))) {
+        try (val wrt = new BufferedWriter(new FileWriter(getFile()))) {
             for (IndexData index : indexes) {
                 wrt.write(gson.toJson(index));
                 wrt.newLine();

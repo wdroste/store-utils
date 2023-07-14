@@ -1,11 +1,10 @@
 package org.neo4j.tool.dto;
 
-import java.util.Set;
-
 import com.google.gson.annotations.SerializedName;
-
 import lombok.Data;
 import lombok.Singular;
+
+import java.util.Set;
 
 @Data
 public class StoreCopyConfiguration {

@@ -1,12 +1,8 @@
 package org.neo4j.tool;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.PrintWriter;
-import java.util.Collections;
-import java.util.Map;
-import java.util.Set;
-
+import it.unimi.dsi.fastutil.longs.Long2LongMap;
+import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
+import lombok.RequiredArgsConstructor;
 import org.neo4j.graphdb.Label;
 import org.neo4j.graphdb.RelationshipType;
 import org.neo4j.graphdb.factory.GraphDatabaseFactory;
@@ -23,9 +19,12 @@ import org.neo4j.unsafe.batchinsert.BatchInserter;
 import org.neo4j.unsafe.batchinsert.BatchInserters;
 import org.neo4j.unsafe.batchinsert.BatchRelationship;
 
-import it.unimi.dsi.fastutil.longs.Long2LongMap;
-import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
-import lombok.RequiredArgsConstructor;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.PrintWriter;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Set;
 
 import static org.neo4j.tool.StoreCopyUtil.buildFlusher;
 import static org.neo4j.tool.StoreCopyUtil.labelInSet;

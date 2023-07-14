@@ -1,16 +1,16 @@
 package org.neo4j.tool;
 
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
-
 import org.neo4j.driver.v1.Driver;
 import org.neo4j.tool.dto.IndexData;
 import org.neo4j.tool.dto.IndexDataComparator;
-
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
+
+import java.io.File;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.unmodifiableList;
 import static org.neo4j.tool.util.Print.println;
@@ -31,7 +31,7 @@ public class DumpIndex extends AbstractIndexCommand {
             names = {"-f", "--filename"},
             description = "Name of the file to dump.",
             defaultValue = "dump.json")
-    protected String filename;
+    protected File file;
 
     @Option(
             names = {"-l", "--lucene"},
@@ -49,7 +49,7 @@ public class DumpIndex extends AbstractIndexCommand {
     void execute(final Driver driver) {
         // query for all the indexes
         final List<IndexData> indexes = readIndexes(driver);
-        println("Building index file: %s", this.filename);
+        println("Building index file: %s", this.file);
         final List<IndexData> writeIndexes =
                 (lucene == null || lucene.isEmpty()) ? indexes : luceneIndex(indexes);
         final List<IndexData> sortedIndexes =
@@ -74,7 +74,7 @@ public class DumpIndex extends AbstractIndexCommand {
     }
 
     @Override
-    String getFilename() {
-        return this.filename;
+    File getFile() {
+        return this.file;
     }
 }
