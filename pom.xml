@@ -8,10 +8,10 @@
     <packaging>jar</packaging>
 
     <properties>
-        <revision>3.5.35.x-SNAPSHOT</revision>
+        <revision>3.5.31.x-SNAPSHOT</revision>
 
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <neo4j.version>3.5.35</neo4j.version>
+        <neo4j.version>3.5.31</neo4j.version>
     </properties>
 
     <licenses>
