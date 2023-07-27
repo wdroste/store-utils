@@ -2,6 +2,7 @@ package org.neo4j.tool;
 
 import com.google.gson.GsonBuilder;
 import lombok.val;
+import org.apache.commons.lang3.StringUtils;
 import org.neo4j.driver.v1.AuthTokens;
 import org.neo4j.driver.v1.Config;
 import org.neo4j.driver.v1.Driver;
@@ -33,6 +34,7 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.joining;
+import static org.apache.commons.lang3.StringUtils.isNotBlank;
 import static org.neo4j.tool.util.Print.println;
 
 abstract class AbstractIndexCommand implements Runnable {
@@ -219,24 +221,25 @@ abstract class AbstractIndexCommand implements Runnable {
         }
     }
 
-    String indexQuery(IndexData indexData) {
-        final String label = Iterables.firstOrNull(indexData.getLabelsOrTypes());
+    String buildIndex(IndexData indexData) {
+        val label = Iterables.first(indexData.getLabelsOrTypes());
+        val properties = String.join(",", indexData.getProperties());
         // create an index
-        final String IDX_FMT = "CREATE INDEX ON :`%s`(%s);";
-        // make sure to quote all the properties of an index
-        return String.format(IDX_FMT, label, propertiesArgument(indexData));
-    }
-
-    String constraintQuery(IndexData indexData) {
-        // create constraint
-        final String label = Iterables.firstOrNull(indexData.getLabelsOrTypes());
-        final String format = "CREATE CONSTRAINT ON (n:`%s`) ASSERT n.`%s` IS UNIQUE;";
-        final String firstProp = Iterables.firstOrNull(indexData.getProperties());
-        return String.format(format, label, firstProp);
+        return String.format(":`%s`(%s)", label, properties);
     }
 
     String indexOrConstraintQuery(IndexData indexData) {
-        return indexData.isUniqueness() ? constraintQuery(indexData) : indexQuery(indexData);
+        val procedure = indexData.isUniqueness()
+                ? "createUniquePropertyConstraint"
+                : "createIndex";
+        val indexProvider = isNotBlank(indexData.getIndexProvider())
+                ? indexData.getIndexProvider()
+                : "native-btree-1.0";
+        val index = buildIndex(indexData);
+        // create an index
+        val FMT = "CALL db.%s(\"%s\",\"%s\")";
+        // make sure to quote all the properties of an index
+        return String.format(FMT, procedure, index, indexProvider);
     }
 
     String propertiesArgument(IndexData indexData) {
@@ -253,10 +256,10 @@ abstract class AbstractIndexCommand implements Runnable {
     }
 
     IndexStatus toIndexState(Transaction tx, IndexData index) {
-        val fmt = "call db.indexes() yield description, state, progress WHERE description contains \":%s(%s)\" return state, progress";
-        val props = String.join(",", index.getProperties());
-        val label = Iterables.firstOrNull(index.getLabelsOrTypes());
-        val result = tx.run(String.format(fmt, label, props));
+        val fmt = "call db.indexes() yield description, state, progress " +
+                "WHERE description contains \"%s\" return state, progress";
+        val indexName = buildIndex(index);
+        val result = tx.run(String.format(fmt, indexName));
         val record = Iterables.firstOrNull(result.list());
         if (null == record) {
             return IndexStatus.builder().state(State.FAILED).build();
@@ -316,7 +319,6 @@ abstract class AbstractIndexCommand implements Runnable {
         }
         val fmt = "DROP INDEX ON :`%s`(%s);";
         return String.format(fmt, label, propertiesArgument(data));
-
     }
 
     void dropIndex(final Driver driver, final IndexData indexData) {
