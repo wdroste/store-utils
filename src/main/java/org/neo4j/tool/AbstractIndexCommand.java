@@ -3,6 +3,8 @@ package org.neo4j.tool;
 import com.google.gson.GsonBuilder;
 import lombok.val;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.text.StringSubstitutor;
+import org.graalvm.compiler.replacements.StringSubstitutions;
 import org.neo4j.driver.v1.AuthTokens;
 import org.neo4j.driver.v1.Config;
 import org.neo4j.driver.v1.Driver;
@@ -34,7 +36,8 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.joining;
-import static org.apache.commons.lang3.StringUtils.isNotBlank;
+import static org.neo4j.tool.IndexUtils.buildIndex;
+import static org.neo4j.tool.IndexUtils.indexOrConstraintQuery;
 import static org.neo4j.tool.util.Print.println;
 
 abstract class AbstractIndexCommand implements Runnable {
@@ -219,27 +222,6 @@ abstract class AbstractIndexCommand implements Runnable {
                 LOG.debug(resultSummary.toString());
             }
         }
-    }
-
-    String buildIndex(IndexData indexData) {
-        val label = Iterables.first(indexData.getLabelsOrTypes());
-        val properties = String.join(",", indexData.getProperties());
-        // create an index
-        return String.format(":`%s`(%s)", label, properties);
-    }
-
-    String indexOrConstraintQuery(IndexData indexData) {
-        val procedure = indexData.isUniqueness()
-                ? "createUniquePropertyConstraint"
-                : "createIndex";
-        val indexProvider = isNotBlank(indexData.getIndexProvider())
-                ? indexData.getIndexProvider()
-                : "native-btree-1.0";
-        val index = buildIndex(indexData);
-        // create an index
-        val FMT = "CALL db.%s(\"%s\",\"%s\")";
-        // make sure to quote all the properties of an index
-        return String.format(FMT, procedure, index, indexProvider);
     }
 
     String propertiesArgument(IndexData indexData) {
