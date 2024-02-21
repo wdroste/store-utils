@@ -10,8 +10,8 @@
     <name>store-utils</name>
 
     <properties>
-        <revision>4.4.28.x-SNAPSHOT</revision>
-        <neo4j.version>4.4.28</neo4j.version>
+        <revision>4.4.30.x-SNAPSHOT</revision>
+        <neo4j.version>4.4.30</neo4j.version>
         <neo4j.driver.version>4.4.11</neo4j.driver.version>
 
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -36,7 +36,7 @@
         <dependency>
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
-            <version>32.0.0-jre</version>
+            <version>32.0.1-jre</version>
         </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
