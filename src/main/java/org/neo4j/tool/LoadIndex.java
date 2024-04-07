@@ -15,11 +15,6 @@
  */
 package org.neo4j.tool;
 
-import static org.neo4j.tool.util.Print.println;
-
-import java.io.File;
-import java.util.Set;
-import java.util.stream.Collectors;
 import org.apache.commons.lang3.tuple.Pair;
 import org.neo4j.internal.helpers.collection.Iterables;
 import org.neo4j.tool.dto.Bucket;
@@ -29,6 +24,12 @@ import org.neo4j.tool.index.IndexManager;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
+
+import java.io.File;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import static org.neo4j.tool.util.Print.println;
 
 /**
  * Takes a dump file and creates each of the constraints and indexes from that file in a controlled
@@ -69,13 +70,12 @@ public class LoadIndex extends AbstractIndexCommand {
 
     @Override
     void execute(final IndexManager indexManager) {
-        final var ver = indexManager.determineVersion();
         final var fileIndexes = indexManager.readIndexesFromFile(file);
 
         // just print all the queries
         if (dryRun) {
             for (IndexData x : fileIndexes) {
-                final String query = indexManager.indexOrConstraintQuery(ver, x);
+                final String query = indexManager.indexOrConstraintQuery(x);
                 println(query);
             }
             return;
@@ -100,7 +100,7 @@ public class LoadIndex extends AbstractIndexCommand {
         // process each bucket
         final var buckets = BucketBuilder.build(sizes);
         for (Bucket bucket : buckets) {
-            indexManager.create(ver, bucket);
+            indexManager.create(bucket);
         }
     }
 

@@ -15,12 +15,28 @@
  */
 package org.neo4j.tool.index;
 
-import static java.util.stream.Collectors.joining;
-import static java.util.stream.Collectors.toUnmodifiableSet;
-import static org.neo4j.tool.util.Print.println;
-import static org.neo4j.tool.util.Print.progressPercentage;
-
 import com.google.gson.GsonBuilder;
+import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.neo4j.driver.AccessMode;
+import org.neo4j.driver.Driver;
+import org.neo4j.driver.Record;
+import org.neo4j.driver.Result;
+import org.neo4j.driver.Session;
+import org.neo4j.driver.SessionConfig;
+import org.neo4j.driver.Transaction;
+import org.neo4j.driver.TransactionCallback;
+import org.neo4j.driver.TransactionContext;
+import org.neo4j.driver.Value;
+import org.neo4j.driver.summary.ResultSummary;
+import org.neo4j.internal.helpers.collection.Iterables;
+import org.neo4j.tool.dto.Bucket;
+import org.neo4j.tool.dto.ConstraintStatus;
+import org.neo4j.tool.dto.IndexBatch;
+import org.neo4j.tool.dto.IndexData;
+import org.neo4j.tool.dto.IndexStatus;
+import org.neo4j.tool.dto.IndexStatus.State;
+
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
@@ -34,27 +50,11 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
-import lombok.AllArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.neo4j.driver.AccessMode;
-import org.neo4j.driver.Driver;
-import org.neo4j.driver.Record;
-import org.neo4j.driver.Result;
-import org.neo4j.driver.Session;
-import org.neo4j.driver.SessionConfig;
-import org.neo4j.driver.Transaction;
-import org.neo4j.driver.TransactionWork;
-import org.neo4j.driver.Value;
-import org.neo4j.driver.summary.ResultSummary;
-import org.neo4j.internal.helpers.collection.Iterables;
-import org.neo4j.tool.VersionQuery;
-import org.neo4j.tool.VersionQuery.Neo4jVersion;
-import org.neo4j.tool.dto.Bucket;
-import org.neo4j.tool.dto.ConstraintStatus;
-import org.neo4j.tool.dto.IndexBatch;
-import org.neo4j.tool.dto.IndexData;
-import org.neo4j.tool.dto.IndexStatus;
-import org.neo4j.tool.dto.IndexStatus.State;
+
+import static java.util.stream.Collectors.joining;
+import static java.util.stream.Collectors.toUnmodifiableSet;
+import static org.neo4j.tool.util.Print.println;
+import static org.neo4j.tool.util.Print.progressPercentage;
 
 @Slf4j
 @AllArgsConstructor
@@ -95,8 +95,8 @@ public class IndexManager {
         return ret;
     }
 
-    void createIndex(Neo4jVersion version, IndexData index) {
-        final var query = indexOrConstraintQuery(version, index);
+    void createIndex(IndexData index) {
+        final var query = indexOrConstraintQuery(index);
         println(query);
         try {
             writeTransaction(query);
@@ -166,32 +166,24 @@ public class IndexManager {
         // query for all the indexes
         try (final Session session = driver.session()) {
             assert session != null;
-            ResultSummary resultSummary = session.writeTransaction(tx -> tx.run(query).consume());
+            ResultSummary resultSummary = session.executeWrite(tx -> tx.run(query).consume());
             if (log.isDebugEnabled()) {
                 log.debug(resultSummary.toString());
             }
         }
     }
 
-    <T> T readTransaction(TransactionWork<T> work) {
+    <T> T readTransaction(TransactionCallback<T> work) {
         // query for all the indexes
         final var cfg = SessionConfig.builder().withDefaultAccessMode(AccessMode.READ).build();
         try (final Session session = driver.session(cfg)) {
             assert session != null;
-            return session.readTransaction(work);
+            return session.executeRead(work);
         }
     }
 
-    String createConstraintFormat(Neo4jVersion version) {
-        switch (version) {
-            case v4_2:
-            case v4_3:
-                return "CREATE CONSTRAINT `%s` IF NOT EXISTS ON (n:`%s`) ASSERT n.%s IS UNIQUE";
-            case v4_4:
-                return "CREATE CONSTRAINT `%s` IF NOT EXISTS FOR (n:`%s`) REQUIRE n.%s IS UNIQUE;";
-            default:
-                throw new IllegalArgumentException("Unsupported version: " + version);
-        }
+    String createConstraintFormat() {
+        return "CREATE CONSTRAINT `%s` IF NOT EXISTS FOR (n:`%s`) REQUIRE n.%s IS UNIQUE;";
     }
 
     String indexQuery(IndexData indexData) {
@@ -209,19 +201,19 @@ public class IndexManager {
         return String.format(IDX_FMT, name, label, properties, indexProvider);
     }
 
-    String constraintQuery(Neo4jVersion version, IndexData indexData) {
+    String constraintQuery(IndexData indexData) {
         final String name = indexData.getName();
         final String label = Iterables.firstOrNull(indexData.getLabelsOrTypes());
 
         // create constraint
-        final String format = createConstraintFormat(version);
+        final String format = createConstraintFormat();
         final String firstProp = Iterables.firstOrNull(indexData.getProperties());
         return String.format(format, name, label, firstProp);
     }
 
-    public String indexOrConstraintQuery(Neo4jVersion version, IndexData indexData) {
+    public String indexOrConstraintQuery(IndexData indexData) {
         return indexData.isUniqueness()
-                ? constraintQuery(version, indexData)
+                ? constraintQuery(indexData)
                 : indexQuery(indexData);
     }
 
@@ -229,7 +221,7 @@ public class IndexManager {
         // query for all the indexes
         try (final Session session = driver.session()) {
             assert session != null;
-            return session.readTransaction(tx -> toIndexState(tx, name));
+            return session.executeRead(tx -> toIndexState(tx, name));
         }
     }
 
@@ -237,18 +229,18 @@ public class IndexManager {
         // query for all the indexes
         try (final Session session = driver.session()) {
             assert session != null;
-            return session.readTransaction(tx -> toConstraintStatus(tx, name));
+            return session.executeRead(tx -> toConstraintStatus(tx, name));
         }
     }
 
-    ConstraintStatus toConstraintStatus(Transaction tx, String name) {
+    ConstraintStatus toConstraintStatus(TransactionContext tx, String name) {
         final String FMT = "show constraints yield name WHERE name = \"%s\"";
         final var result = tx.run(String.format(FMT, name));
         final var record = Iterables.firstOrNull(result.list());
         return ConstraintStatus.of(null != record);
     }
 
-    IndexStatus toIndexState(Transaction tx, String name) {
+    IndexStatus toIndexState(TransactionContext tx, String name) {
         final String FMT = "show indexes yield populationPercent,state,name WHERE name = \"%s\"";
         final var result = tx.run(String.format(FMT, name));
         final var record = Iterables.firstOrNull(result.list());
@@ -285,11 +277,13 @@ public class IndexManager {
         }
     }
 
-    /** Read all the index and constraints in order, of constrains first. */
+    /**
+     * Read all the index and constraints in order, of constrains first.
+     */
     public List<IndexData> readDBIndexes() {
         try (Session session = driver.session()) {
             assert session != null;
-            return session.readTransaction(
+            return session.executeRead(
                     tx -> {
                         final var result = tx.run("show indexes;");
                         return result.list().stream()
@@ -321,16 +315,12 @@ public class IndexManager {
         return readDBIndexes().stream().map(IndexData::getName).collect(toUnmodifiableSet());
     }
 
-    public void createAndMonitor(Neo4jVersion version, IndexData index, boolean recreate) {
+    public void createAndMonitor(IndexData index, boolean recreate) {
         if (recreate) {
             dropIndex(index);
         }
-        createIndex(version, index);
+        createIndex(index);
         monitorCreation(index);
-    }
-
-    public Neo4jVersion determineVersion() {
-        return VersionQuery.determineVersion(driver);
     }
 
     public long labelSize(String labelName) {
@@ -344,14 +334,16 @@ public class IndexManager {
                 });
     }
 
-    /** Create all the indexes in one transaction for the bucket. */
-    public void create(final Neo4jVersion version, final Bucket bucket) {
+    /**
+     * Create all the indexes in one transaction for the bucket.
+     */
+    public void create(final Bucket bucket) {
         for (final IndexBatch batch : bucket.getBatches()) {
             // send all the commands
             try (final Session s = driver.session()) {
                 final Transaction tx = s.beginTransaction();
                 for (IndexData index : batch.getIndexes()) {
-                    final var q = indexOrConstraintQuery(version, index);
+                    final var q = indexOrConstraintQuery(index);
                     println(q);
                     tx.run(q);
                 }

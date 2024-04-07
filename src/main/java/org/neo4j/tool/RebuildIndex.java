@@ -55,7 +55,6 @@ public class RebuildIndex extends AbstractIndexCommand {
     @Override
     void execute(final IndexManager indexManager) throws IOException {
         final var indexes = indexManager.readDBIndexes();
-        final var ver = indexManager.determineVersion();
         String lastIndexName = file.isFile() ? Files.readString(file.toPath()) : null;
         for (final IndexData index : indexes) {
 
@@ -72,7 +71,7 @@ public class RebuildIndex extends AbstractIndexCommand {
 
             // save resume file
             Files.writeString(file.toPath(), index.getName());
-            indexManager.createAndMonitor(ver, index, true);
+            indexManager.createAndMonitor(index, true);
         }
         println("Last index saved to %s", this.file);
     }

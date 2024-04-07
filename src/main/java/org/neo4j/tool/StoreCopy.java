@@ -15,7 +15,6 @@
  */
 package org.neo4j.tool;
 
-import static org.neo4j.configuration.GraphDatabaseSettings.allow_upgrade;
 import static org.neo4j.configuration.GraphDatabaseSettings.data_directory;
 import static org.neo4j.configuration.GraphDatabaseSettings.pagecache_memory;
 import static org.neo4j.configuration.GraphDatabaseSettings.read_only_databases;
@@ -24,6 +23,7 @@ import static org.neo4j.tool.util.Neo4jHelper.newBatchInserter;
 import static org.neo4j.tool.util.Neo4jHelper.shutdown;
 import static org.neo4j.tool.util.Print.println;
 
+
 import it.unimi.dsi.fastutil.longs.Long2LongMap;
 import java.io.Closeable;
 import java.io.File;
@@ -31,12 +31,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Optional;
 import java.util.Set;
-import org.neo4j.batchinsert.BatchInserter;
 import org.neo4j.configuration.Config;
 import org.neo4j.tool.copy.NodeCopyJob;
-import org.neo4j.tool.copy.RelationshipCopyJob;
-import org.neo4j.tool.util.Neo4jHelper;
-import org.neo4j.tool.util.Neo4jHelper.HighestInfo;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;

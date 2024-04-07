@@ -34,7 +34,6 @@ import org.neo4j.batchinsert.BatchInserter;
 import org.neo4j.graphdb.Label;
 import org.neo4j.internal.helpers.collection.Iterables;
 import org.neo4j.kernel.impl.store.InvalidRecordException;
-import org.neo4j.tool.util.Flusher;
 import org.neo4j.tool.util.PredicateHelper;
 
 /** NOTE: {@link BatchInserter} is not thread safe. */
