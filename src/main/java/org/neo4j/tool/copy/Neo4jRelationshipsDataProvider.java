@@ -1,9 +1,5 @@
 package org.neo4j.tool.copy;
 
-import com.brinqa.platform.compute.ComputeCypherService;
-import com.brinqa.platform.compute.ComputeCypherService.Config;
-import com.brinqa.platform.v3.analytics.warehouse.service.DataModelDataProvider.Data;
-import com.brinqa.platform.v3.analytics.warehouse.service.RelationshipsDataProvider;
 import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.functions.Function;
@@ -12,11 +8,9 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.neo4j.driver.Record;
 import org.reactivestreams.Publisher;
-import org.springframework.stereotype.Service;
 
 import java.util.List;
 
-import static com.brinqa.platform.v3.analytics.warehouse.util.Neo4jHelper.buildAcquisitionContainerCreator;
 
 /**
  * The purpose of this class is to use key pagination to go through every DataSet label in the

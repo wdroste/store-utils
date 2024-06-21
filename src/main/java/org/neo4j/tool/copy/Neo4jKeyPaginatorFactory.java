@@ -8,6 +8,8 @@ import lombok.RequiredArgsConstructor;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static org.neo4j.tool.copy.Neo4jHelper.buildPaginateIdsQuery;
+
 
 @RequiredArgsConstructor
 public class Neo4jKeyPaginatorFactory {
