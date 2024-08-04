@@ -92,7 +92,7 @@ public class LoadIndex extends AbstractIndexCommand {
 
         // find all the sizes
         final var sizes =
-                missing.parallelStream()
+                missing.stream()
                         .filter(idx -> idx.getLabelsOrTypes().size() == 1)
                         .map(idx -> determineSize(indexManager, idx))
                         .collect(Collectors.toList());
