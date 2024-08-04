@@ -20,8 +20,7 @@ import static org.neo4j.tool.util.Flusher.newFlusher;
 import static org.neo4j.tool.util.Print.println;
 import static org.neo4j.tool.util.Print.progressPercentage;
 
-import it.unimi.dsi.fastutil.longs.Long2LongMap;
-import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
+import com.brinqa.storage.Long2LongStore;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -48,10 +47,10 @@ public class NodeCopyJob {
     private final String acceptanceScript;
     private final Set<String> deleteNodesWithLabels;
 
-    public Long2LongMap process() {
+    public void process(Long2LongStore store) {
         try (PredicateBuilder builder = new PredicateBuilder()) {
             final var predicate = builder.newInstance(acceptanceScript);
-            return new NodeCopyProcessor(predicate).process();
+            new NodeCopyProcessor(store, predicate).process();
         } catch (Exception ioe) {
             throw new IllegalStateException(ioe);
         }
@@ -61,6 +60,7 @@ public class NodeCopyJob {
     class NodeCopyProcessor {
 
         // acceptance criteria script
+        private final Long2LongStore copiedNodes;
         private final Predicate<NodeObject> acceptance;
 
         // stats
@@ -68,8 +68,6 @@ public class NodeCopyJob {
         private final long start = currentTimeMillis();
 
         private final Flusher flusher = newFlusher(sourceDb);
-
-        private final Long2LongMap copiedNodes = new Long2LongOpenHashMap();
 
         private long count = 0L;
         private long notFound = 0L;
@@ -79,14 +77,13 @@ public class NodeCopyJob {
         private final Predicate<List<String>> testDeleteLabels =
                 PredicateHelper.buildLabelInverseMatcher(deleteNodesWithLabels);
 
-        public Long2LongMap process() {
+        public void process() {
             // run the task
             LongStream.range(0, bound).forEach(this::processNode);
             // print the final percentage
             progressPercentage(count, bound);
             // print the final stats
             printFinalStats(copiedNodes.size());
-            return copiedNodes;
         }
 
         void processNode(long sourceNodeId) {

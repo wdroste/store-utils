@@ -24,7 +24,7 @@ import static org.neo4j.tool.util.Neo4jHelper.newBatchInserter;
 import static org.neo4j.tool.util.Neo4jHelper.shutdown;
 import static org.neo4j.tool.util.Print.println;
 
-import it.unimi.dsi.fastutil.longs.Long2LongMap;
+import com.brinqa.storage.Long2LongStore;
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
@@ -172,12 +172,16 @@ public class StoreCopy implements Runnable {
                             targetDb,
                             acceptanceScript,
                             deletionLabels);
-            final Long2LongMap copiedNodeIds = nodeCopyJob.process();
 
-            // copy relationships from source to target
-            final var relationshipCopyJob =
-                    new RelationshipCopyJob(highestInfo.getRelationshipId(), sourceDb, targetDb);
-            relationshipCopyJob.process(copiedNodeIds);
+            try (final var store = new Long2LongStore()) {
+                nodeCopyJob.process(store);
+
+                // copy relationships from source to target
+                final var relationshipCopyJob =
+                        new RelationshipCopyJob(
+                                highestInfo.getRelationshipId(), sourceDb, targetDb);
+                relationshipCopyJob.process(store);
+            }
         }
 
         @Override
