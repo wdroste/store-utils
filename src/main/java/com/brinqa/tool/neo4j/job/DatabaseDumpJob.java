@@ -16,7 +16,7 @@ public class DatabaseDumpJob implements Runnable {
     private final DatabaseDumpJobListener listener;
 
     enum Stage {
-        READ_LABELS, DUMP_DATASETS, DUMP_CONFIGURATION, DUMP_REMAINING_LABELS, DUMP_RELATIONSHIPS
+        READ_LABELS, DUMP_DATA, DUMP_RELATIONSHIPS
     }
 
     @Value
@@ -30,15 +30,8 @@ public class DatabaseDumpJob implements Runnable {
      */
     @Override
     public void run() {
-        // check if an existing run is already there
-
         // find all the labels
-        // dump all the data sets
-        // dump all the configuration labels
-
-        // dump any labels that are not data or configuration
-
+        // dump all the data
         // dump all the relationships
-
     }
 }
